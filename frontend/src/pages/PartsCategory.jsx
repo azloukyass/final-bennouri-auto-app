@@ -83,17 +83,14 @@ export default function PartsCategory() {
                   <CategoryIcon name={c.icon} className="w-10 h-10" stroke={meta.iconStroke} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  {c.sub_items && c.sub_items.length > 0 ? (
-                    <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-slate-700">
-                      {c.sub_items.map((s, i) => (
-                        <span key={i} className="hover:text-red-600 transition-colors">{s}</span>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-sm text-slate-500 italic">Aucun sous-élément renseigné</div>
-                  )}
-                  <div className="mt-2 text-xs text-slate-400 uppercase tracking-widest font-semibold">
-                    {c.sub_items?.length || 0} sous-{(c.sub_items?.length || 0) > 1 ? "catégories" : "catégorie"} →
+                  <div className="text-3xl sm:text-4xl font-display font-black text-red-600 leading-none">
+                    {c.sub_items?.length || 0}
+                  </div>
+                  <div className="mt-2 text-xs uppercase tracking-widest font-semibold text-slate-500">
+                    sous-{(c.sub_items?.length || 0) > 1 ? "catégories" : "catégorie"} disponibles
+                  </div>
+                  <div className="mt-3 text-xs text-red-600 font-bold uppercase tracking-wider">
+                    Explorer la sélection →
                   </div>
                 </div>
               </Link>

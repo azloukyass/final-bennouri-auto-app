@@ -61,7 +61,7 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 grid grid-cols-1 md:grid-cols-4 gap-10">
         <div className="md:col-span-1">
           <div className="font-display text-2xl font-black text-white tracking-tight">
-            BENOURI <span className="text-red-600">PIASUTO</span>
+            BENNOURI <span className="text-red-600">Pièces</span>
           </div>
           <div className="text-[10px] uppercase tracking-[0.3em] text-red-500 mt-1 mb-4">Pièces Auto Originales</div>
           <p className="text-sm text-white/60 leading-relaxed">

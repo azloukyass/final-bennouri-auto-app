@@ -15,14 +15,13 @@ import { api, formatApiError } from "@/lib/api";
 import { useCart } from "@/context/CartContext";
 import { BRANDS, logoUrl } from "@/data/brands";
 import { OilBottle, BrakeDisc, CarBattery, OilFilter, Engine, ShockAbsorber } from "@/components/ProductIcons";
+import PartnersSearchModal from "@/components/PartnersSearchModal";
 
 const POPULAR_CATEGORIES = [
-  { key: "freinage", label: "Freinage", Icon: BrakeDisc, count: "1 200+ pièces" },
-  { key: "huiles", label: "Huiles & Liquides", Icon: OilBottle, count: "850+ pièces" },
-  { key: "moteur", label: "Moteur", Icon: Engine, count: "3 500+ pièces" },
-  { key: "batterie", label: "Batterie", Icon: CarBattery, count: "320+ pièces" },
-  { key: "filtres", label: "Filtres", Icon: OilFilter, count: "1 100+ pièces" },
-  { key: "suspension", label: "Suspension", Icon: ShockAbsorber, count: "640+ pièces" },
+  { slug: "batterie", label: "Batterie", Icon: CarBattery },
+  { slug: "filtre-huile", label: "Filtre Huile", Icon: OilFilter },
+  { slug: "accessoires", label: "Accessoires", Icon: Engine },
+  { slug: "eau-radiateur", label: "Eau Radiateur", Icon: OilBottle },
 ];
 
 const TRUST_BADGES = [
@@ -37,6 +36,7 @@ export default function LandingPage() {
   const { setVehicle } = useCart();
   const [vin, setVin] = useState("");
   const [loading, setLoading] = useState(false);
+  const [popularCategory, setPopularCategory] = useState(null);
 
   const handleVin = async (e) => {
     e.preventDefault();
@@ -254,23 +254,23 @@ export default function LandingPage() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
             {POPULAR_CATEGORIES.map((c) => (
-              <Link
-                key={c.key}
-                to="/recherche-vin"
-                className="group relative bg-zinc-50 border border-zinc-200 hover:border-red-600 rounded-sm overflow-hidden aspect-square flex flex-col items-center justify-center p-4 transition-all hover:bg-white hover:shadow-xl"
-                data-testid={`popular-cat-${c.key}`}
+              <button
+                key={c.slug}
+                onClick={() => setPopularCategory(c.slug)}
+                className="group relative bg-zinc-50 border border-zinc-200 hover:border-red-600 rounded-sm overflow-hidden aspect-square flex flex-col items-center justify-center p-5 transition-all hover:bg-white hover:shadow-xl"
+                data-testid={`popular-cat-${c.slug}`}
               >
-                <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-red-600/0 group-hover:bg-red-600/10 rounded-full blur-2xl transition-colors" />
+                <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-red-600/0 group-hover:bg-red-600/10 rounded-full blur-2xl transition-colors" />
                 <div className="relative w-full h-2/3 flex items-center justify-center">
-                  <c.Icon className="w-full h-full max-w-[80px] group-hover:scale-110 transition-transform" />
+                  <c.Icon className="w-full h-full max-w-[100px] group-hover:scale-110 transition-transform" />
                 </div>
-                <div className="relative mt-2 text-center">
-                  <div className="font-display font-bold text-black text-sm uppercase tracking-wide">{c.label}</div>
-                  <div className="text-[10px] text-red-600 mt-0.5 font-semibold">{c.count}</div>
+                <div className="relative mt-3 text-center">
+                  <div className="font-display font-black text-black text-base uppercase tracking-wide">{c.label}</div>
+                  <div className="text-[10px] text-red-600 mt-1 font-bold uppercase tracking-widest">Voir produits →</div>
                 </div>
-              </Link>
+              </button>
             ))}
           </div>
         </div>
@@ -357,6 +357,13 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      <PartnersSearchModal
+        open={!!popularCategory}
+        query={popularCategory ? `Catégorie : ${popularCategory}` : ""}
+        categorySlug={popularCategory}
+        onClose={() => setPopularCategory(null)}
+      />
     </div>
   );
 }

@@ -82,8 +82,42 @@ def _normalize_item(raw: Dict) -> Dict:
         "stock": stock_qty,
         "prix_origine_tnd": float(raw_prix) if isinstance(raw_prix, (int, float)) else None,
         "prix_tnd": _adjust_price(raw_prix),
+        "image": raw.get("imageTecdoc") or (raw.get("images") if isinstance(raw.get("images"), str) else ""),
         "categorie": " / ".join([x for x in [raw.get("niv1"), raw.get("niv2"), raw.get("niv3"), raw.get("niv4")] if x]),
     }
+
+
+async def search_by_niv_levels(niv1: str, niv2: Optional[str] = None,
+                                niv3: Optional[str] = None, niv4: Optional[str] = None) -> List[Dict]:
+    """Browse FadPro catalog by hierarchical niv1/niv2/niv3/niv4 levels.
+    Used for popular-category browsing (e.g. Batterie = ELECTRIQUE / DEMARREUR / COMPOSANTS / BATTERIE).
+    """
+    token = await _get_token()
+    if not token:
+        raise RuntimeError("Authentification FadPro impossible")
+    params = {"niv1": niv1}
+    if niv2: params["niv2"] = niv2
+    if niv3: params["niv3"] = niv3
+    if niv4: params["niv4"] = niv4
+    url = f"{FADPRO_BASE}/fad/api/level/searchByNivLevels"
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as cl:
+            r = await cl.get(url, params=params, headers=headers)
+            if r.status_code == 401:
+                token = await _get_token(force=True)
+                headers["Authorization"] = f"Bearer {token}"
+                r = await cl.get(url, params=params, headers=headers)
+            if r.status_code != 200:
+                logger.warning(f"FadPro niv-search failed: {r.status_code} {r.text[:200]}")
+                return []
+            data = r.json()
+            if not isinstance(data, list):
+                return []
+            return [_normalize_item(it) for it in data]
+    except (httpx.RequestError, ValueError) as e:
+        logger.warning(f"FadPro niv-search error: {e}")
+        return []
 
 
 async def search_reference(reference: str) -> List[Dict]:

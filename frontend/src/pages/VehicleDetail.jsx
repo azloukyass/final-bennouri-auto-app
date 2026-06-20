@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import { Wrench, Zap, CarFront, ArrowRight, ChevronLeft, Car, Fuel, Calendar, Hash, Database, Loader2 } from "lucide-react";
 import { api, formatApiError } from "@/lib/api";
 import { useCart } from "@/context/CartContext";
-import FadProSearch from "@/components/FadProSearch";
 
 const SECTIONS = [
   { slug: "mecanique", label: "Mécanique", desc: "Moteur, transmission, freinage, suspension", Icon: Wrench, color: "from-red-600 to-red-700", img: "https://images.pexels.com/photos/4489732/pexels-photo-4489732.jpeg?auto=compress&cs=tinysrgb&w=900&h=600" },
@@ -56,7 +55,7 @@ export default function VehicleDetail() {
           setVehicle(data);
           clearInterval(interval);
         }
-      } catch {}
+      } catch { /* ignore polling failure */ }
     }, 6000);
     return () => clearInterval(interval);
   }, [vehicle?.vin, vehicle?.partsouq_tree, setVehicle]);
@@ -94,32 +93,13 @@ export default function VehicleDetail() {
         </div>
       </div>
 
-      {/* FadPro reference search */}
-      <div className="bg-white border-b border-slate-200" data-testid="fadpro-search-strip">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-            <div className="flex-shrink-0">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.3em] text-red-600 mb-0.5">
-                Recherche rapide
-              </div>
-              <div className="text-sm font-semibold text-slate-900">
-                Par référence d'origine
-              </div>
-            </div>
-            <div className="flex-1 max-w-2xl">
-              <FadProSearch inline />
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* 3 category cards */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         {!(Array.isArray(vehicle.partsouq_tree) && vehicle.partsouq_tree.length > 0) && !vehicle.vin.startsWith("MAN-") && (
           <div className="mb-8 p-4 bg-amber-50 border border-amber-200 rounded-sm flex items-center gap-3" data-testid="partsouq-loading">
             <div className="w-5 h-5 border-2 border-amber-600 border-t-transparent rounded-full animate-spin flex-shrink-0" />
             <div className="text-sm text-amber-900">
-              <strong>Catalogue Parts en cours de récupération…</strong> Les références OEM officielles s'afficheront ici dans quelques secondes (~30-60s).
+              <strong>Catalogue Parts en cours de récupération…</strong> Les références OEM officielles s&apos;afficheront ici dans quelques secondes (~30-60s).
             </div>
           </div>
         )}
@@ -169,7 +149,7 @@ export default function VehicleDetail() {
                       Catalogue OEM officiel
                     </div>
                     <h3 className="font-display text-2xl sm:text-3xl font-bold text-white mb-2">
-                      Explorer toutes les pièces d'origine
+                      Explorer toutes les pièces d&apos;origine
                     </h3>
                     <p className="text-slate-300 text-sm">
                       {vehicle.partsouq_tree.length} groupes —{" "}

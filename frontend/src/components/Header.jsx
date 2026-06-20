@@ -15,6 +15,8 @@ import {
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
+import { toast } from "sonner";
+import PartnersSearchModal from "@/components/PartnersSearchModal";
 
 // Inline WhatsApp icon (lucide doesn't ship one)
 const WhatsAppIcon = ({ className = "" }) => (
@@ -23,8 +25,11 @@ const WhatsAppIcon = ({ className = "" }) => (
   </svg>
 );
 
-// Real logo image (uploaded by user)
-const LOGO_URL = "https://customer-assets.emergentagent.com/job_mechanic-hub-200/artifacts/4302mpoq_logo-bennouri.jpg";
+const TikTokIcon = ({ className = "" }) => (
+  <svg viewBox="0 0 24 24" className={className} fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.18 8.18 0 0 0 4.78 1.52V6.75a4.85 4.85 0 0 1-1.01-.06z"/>
+  </svg>
+);
 
 export default function Header() {
   const { user, logout } = useAuth();
@@ -32,12 +37,20 @@ export default function Header() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const submitSearch = (e) => {
     e.preventDefault();
     const v = q.trim();
-    if (!v) return;
-    navigate(`/recherche?q=${encodeURIComponent(v)}`);
+    if (v.length < 2) return;
+    if (!user) {
+      toast.error("Connectez-vous pour rechercher une référence");
+      navigate("/connexion");
+      return;
+    }
+    setSearchQuery(v);
+    setSearchOpen(true);
     setOpen(false);
   };
 
@@ -60,7 +73,8 @@ export default function Header() {
             <Link to="/contact" className="text-white hover:text-red-500 transition-colors">Contactez-nous</Link>
             <div className="flex items-center gap-3 pl-2 border-l border-white/15">
               <a href="https://www.facebook.com/profile.php?id=61575421658002" target="_blank" rel="noopener noreferrer" className="text-white hover:text-red-500" aria-label="Facebook" data-testid="header-fb"><Facebook className="w-4 h-4" /></a>
-              <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="text-white hover:text-red-500" aria-label="Instagram"><Instagram className="w-4 h-4" /></a>
+              <a href="https://www.instagram.com/bennouri_auto?igsh=MWxleDN1bW41NHhwdg==" target="_blank" rel="noopener noreferrer" className="text-white hover:text-red-500" aria-label="Instagram"><Instagram className="w-4 h-4" /></a>
+              <a href="https://www.tiktok.com/@bennouri_piece_auto?_r=1&_t=ZS-977PCfpZzRS" target="_blank" rel="noopener noreferrer" className="text-white hover:text-red-500" aria-label="TikTok" data-testid="header-wa"><TikTokIcon className="w-4 h-4" /></a>
               <a href="https://wa.me/21650881000" target="_blank" rel="noopener noreferrer" className="text-white hover:text-red-500" aria-label="WhatsApp" data-testid="header-wa"><WhatsAppIcon className="w-4 h-4" /></a>
             </div>
           </div>
@@ -72,7 +86,7 @@ export default function Header() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center gap-6">
           {/* Logo */}
           <Link to="/" className="flex-shrink-0" data-testid="logo-link">
-            <img src={LOGO_URL} alt="BENOURI PIASUTO" className="h-14 sm:h-16 w-auto object-contain" />
+            <img src="/new_logo.jpeg" alt="BENNOURI Pièces" className="h-14 sm:h-16 w-auto object-contain" />
           </Link>
 
           {/* Search bar with categories */}
@@ -81,8 +95,8 @@ export default function Header() {
               type="text"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Rechercher une pièce, une marque..."
-              className="flex-1 px-4 py-3 text-sm text-black focus:outline-none"
+              placeholder="Référence d'origine (ex: 813317, 96550057)…"
+              className="flex-1 px-4 py-3 text-sm text-black focus:outline-none font-mono-vin tracking-wider"
               data-testid="header-search-input"
             />
             <button
@@ -173,6 +187,11 @@ export default function Header() {
           </div>
         </div>
       )}
+      <PartnersSearchModal
+        open={searchOpen}
+        query={searchQuery}
+        onClose={() => setSearchOpen(false)}
+      />
     </header>
   );
 }

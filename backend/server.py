@@ -21,7 +21,7 @@ from pydantic import BaseModel, EmailStr
 from catalog_data import CATALOG, get_section, get_category, find_part
 from vehicles_catalog import get_catalog as get_vehicles_catalog, VEHICLES
 from partsouq_scraper import scrape_vin as partsouq_scrape, scrape_subgroup_parts
-from fadpro_client import search_reference as fadpro_search
+from fadpro_client import search_reference as fadpro_search, search_by_niv_levels as fadpro_niv_search
 from iis_supplier_client import get_copia, get_partspro
 from email_service import send_welcome_email, send_order_confirmation, send_contact_to_admin
 from rapidapi_client import (
@@ -658,6 +658,131 @@ async def rapidapi_oem_search(model_id: int, q: str, lang_id: int = 6):
     }
     await db.tecdoc_oem_cache.update_one(cache_key, {"$set": doc}, upsert=True)
     return {**doc, "source": "fresh"}
+
+
+POPULAR_CATEGORIES = {
+    "batterie": {
+        "label": "Batterie",
+        "icon": "Zap",
+        "image": "https://images.unsplash.com/photo-1620714223084-8fcacc6dfd8d?auto=format&fit=crop&w=600&q=70",
+        "niv1": "ELECTRIQUE",
+        "niv2": "DEMARREUR / COMPOSANTS",
+        "niv3": "BATTERIE",
+    },
+    "filtre-huile": {
+        "label": "Filtre Huile",
+        "icon": "Droplet",
+        "image": "https://images.unsplash.com/photo-1635775017492-1eb935a082a2?auto=format&fit=crop&w=600&q=70",
+        "niv1": "MECANIQUE",
+        "niv2": "LUBRIFICATION",
+        "niv3": "FILTRE HUILE",
+    },
+    "accessoires": {
+        "label": "Accessoires",
+        "icon": "Package",
+        "image": "https://images.unsplash.com/photo-1486006920555-c77dcf18193c?auto=format&fit=crop&w=600&q=70",
+        "niv1": "ACCESSOIRES",
+        "niv2": None,
+        "niv3": None,
+    },
+    "eau-radiateur": {
+        "label": "Eau Radiateur",
+        "icon": "Thermometer",
+        "image": "https://images.unsplash.com/photo-1632823469850-2f77dd9c7f93?auto=format&fit=crop&w=600&q=70",
+        "niv1": "MECANIQUE",
+        "niv2": "REFROIDISSEMENT",
+        "niv3": "RADIATEUR EAU",
+    },
+}
+
+
+@api.get("/partners/popular-categories")
+async def popular_categories():
+    """Static metadata of popular product categories shown on the landing page."""
+    return {
+        "categories": [
+            {"slug": slug, "label": cfg["label"], "icon": cfg.get("icon"), "image": cfg.get("image")}
+            for slug, cfg in POPULAR_CATEGORIES.items()
+        ]
+    }
+
+
+@api.get("/partners/category-products")
+async def partners_category_products(
+    slug: str,
+    limit: int = 24,
+    user: dict = Depends(get_current_user),
+):
+    """Fetch products for a popular category directly from FadPro's
+    hierarchical browse API (`searchByNivLevels`). Falls back to an empty
+    list if FadPro doesn't have any priced entries.
+    """
+    cfg = POPULAR_CATEGORIES.get(slug)
+    if not cfg:
+        raise HTTPException(404, f"Catégorie '{slug}' introuvable")
+
+    try:
+        raw = await fadpro_niv_search(
+            cfg["niv1"], cfg.get("niv2"), cfg.get("niv3"), cfg.get("niv4"),
+        )
+    except Exception as e:
+        logging.warning(f"FadPro niv-search failed for {slug}: {e}")
+        raw = []
+
+    # Filter: only items with adjusted price > 0
+    items = [it for it in raw if it.get("prix_tnd") and it["prix_tnd"] > 0]
+    # Order: in-stock first, then price ascending
+    items.sort(key=lambda x: (0 if x.get("in_stock") else 1, x.get("prix_tnd") or 1e9))
+    for it in items:
+        it["source"] = "fadpro"
+
+    return {
+        "slug": slug,
+        "label": cfg["label"],
+        "image": cfg.get("image"),
+        "count": len(items),
+        "items": items[:limit],
+    }
+
+
+@api.get("/partners/reference-search")
+async def partners_reference_search(ref: str = "", user: dict = Depends(get_current_user)):
+    """Combined parallel reference search across FadPro + Copia + PartsPro.
+    Authenticated users only.
+
+    Returns one normalised list (items) with `source` field telling which
+    partner each result comes from."""
+    import asyncio
+    ref = (ref or "").strip()
+    if len(ref) < 2:
+        raise HTTPException(400, "Référence trop courte (min. 2 caractères)")
+
+    async def safe_call(coro, source):
+        try:
+            data = await asyncio.wait_for(coro, timeout=8.0)
+            return source, data if isinstance(data, list) else []
+        except Exception as e:
+            logging.warning(f"{source} reference-search error for ref={ref}: {e}")
+            return source, []
+
+    fp, co, pp = await asyncio.gather(
+        safe_call(fadpro_search(ref), "fadpro"),
+        safe_call(get_copia().search_reference(ref), "copia"),
+        safe_call(get_partspro().search_reference(ref), "partspro"),
+    )
+
+    aggregated = []
+    seen = set()
+    for source, items in (fp, co, pp):
+        for it in items:
+            key = (source, (it.get("reference") or "").upper())
+            if key in seen:
+                continue
+            seen.add(key)
+            aggregated.append({**it, "source": it.get("source") or source})
+    # Order: in-stock first, then by price ascending
+    aggregated.sort(key=lambda x: (0 if x.get("in_stock") else 1, x.get("prix_tnd") or 1e9))
+    return {"reference": ref, "count": len(aggregated), "items": aggregated}
 
 
 @api.get("/fadpro/search")
