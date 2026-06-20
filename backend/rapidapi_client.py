@@ -83,7 +83,14 @@ async def list_vehicles_for_model(model_id: int, lang_id: int = LANG_FR,
                 logger.warning(f"RapidAPI list-vehicles → {r.status_code}: {r.text[:200]}")
                 return []
             data = r.json()
-            return data if isinstance(data, list) else []
+            # Response shape: {"modelType":"PC","countModelTypes":N,"modelTypes":[…]}
+            if isinstance(data, dict):
+                items = data.get("modelTypes") or data.get("vehicles") or []
+            elif isinstance(data, list):
+                items = data
+            else:
+                items = []
+            return items if isinstance(items, list) else []
     except Exception as e:
         logger.warning(f"RapidAPI list-vehicles error: {e}")
         return []
