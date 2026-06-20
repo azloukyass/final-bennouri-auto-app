@@ -21,7 +21,11 @@ from pydantic import BaseModel, EmailStr
 from catalog_data import CATALOG, get_section, get_category, find_part
 from vehicles_catalog import get_catalog as get_vehicles_catalog, VEHICLES
 from partsouq_scraper import scrape_vin as partsouq_scrape, scrape_subgroup_parts
-from fadpro_client import search_reference as fadpro_search, search_by_niv_levels as fadpro_niv_search
+from fadpro_client import (
+    search_reference as fadpro_search,
+    search_by_niv_levels as fadpro_niv_search,
+    search_by_designation as fadpro_designation_search,
+)
 from iis_supplier_client import get_copia, get_partspro
 from email_service import send_welcome_email, send_order_confirmation, send_contact_to_admin
 from rapidapi_client import (
@@ -665,6 +669,7 @@ POPULAR_CATEGORIES = {
         "label": "Batterie",
         "icon": "Zap",
         "image": "https://images.unsplash.com/photo-1620714223084-8fcacc6dfd8d?auto=format&fit=crop&w=600&q=70",
+        "mode": "niv",
         "niv1": "ELECTRIQUE",
         "niv2": "DEMARREUR / COMPOSANTS",
         "niv3": "BATTERIE",
@@ -673,25 +678,24 @@ POPULAR_CATEGORIES = {
         "label": "Filtre Huile",
         "icon": "Droplet",
         "image": "https://images.unsplash.com/photo-1635775017492-1eb935a082a2?auto=format&fit=crop&w=600&q=70",
-        "niv1": "MECANIQUE",
-        "niv2": "LUBRIFICATION",
-        "niv3": "FILTRE HUILE",
+        "mode": "niv",
+        "niv1": "FILTRATION",
+        "niv2": "FILTRE HUILE",
+        "niv3": "FILTRES",
     },
     "accessoires": {
         "label": "Accessoires",
         "icon": "Package",
         "image": "https://images.unsplash.com/photo-1486006920555-c77dcf18193c?auto=format&fit=crop&w=600&q=70",
-        "niv1": "ACCESSOIRES",
-        "niv2": None,
-        "niv3": None,
+        "mode": "designation",
+        "designation": "ACCESSOIRE",
     },
     "eau-radiateur": {
         "label": "Eau Radiateur",
         "icon": "Thermometer",
         "image": "https://images.unsplash.com/photo-1632823469850-2f77dd9c7f93?auto=format&fit=crop&w=600&q=70",
-        "niv1": "MECANIQUE",
-        "niv2": "REFROIDISSEMENT",
-        "niv3": "RADIATEUR EAU",
+        "mode": "designation",
+        "designation": "EAU RADIATEUR",
     },
 }
 
@@ -722,11 +726,14 @@ async def partners_category_products(
         raise HTTPException(404, f"Catégorie '{slug}' introuvable")
 
     try:
-        raw = await fadpro_niv_search(
-            cfg["niv1"], cfg.get("niv2"), cfg.get("niv3"), cfg.get("niv4"),
-        )
+        if cfg.get("mode") == "designation":
+            raw = await fadpro_designation_search(cfg["designation"])
+        else:
+            raw = await fadpro_niv_search(
+                cfg["niv1"], cfg.get("niv2"), cfg.get("niv3"), cfg.get("niv4"),
+            )
     except Exception as e:
-        logging.warning(f"FadPro niv-search failed for {slug}: {e}")
+        logging.warning(f"FadPro category lookup failed for {slug}: {e}")
         raw = []
 
     # Filter: only items with adjusted price > 0

@@ -89,9 +89,7 @@ def _normalize_item(raw: Dict) -> Dict:
 
 async def search_by_niv_levels(niv1: str, niv2: Optional[str] = None,
                                 niv3: Optional[str] = None, niv4: Optional[str] = None) -> List[Dict]:
-    """Browse FadPro catalog by hierarchical niv1/niv2/niv3/niv4 levels.
-    Used for popular-category browsing (e.g. Batterie = ELECTRIQUE / DEMARREUR / COMPOSANTS / BATTERIE).
-    """
+    """Browse FadPro catalog by hierarchical niv1/niv2/niv3/niv4 levels."""
     token = await _get_token()
     if not token:
         raise RuntimeError("Authentification FadPro impossible")
@@ -100,23 +98,38 @@ async def search_by_niv_levels(niv1: str, niv2: Optional[str] = None,
     if niv3: params["niv3"] = niv3
     if niv4: params["niv4"] = niv4
     url = f"{FADPRO_BASE}/fad/api/level/searchByNivLevels"
+    return await _fadpro_get_json(url, params, token)
+
+
+async def search_by_designation(designation: str) -> List[Dict]:
+    """Browse FadPro catalog by free-text designation
+    (`/fad/api/b2b/search?designation=...`)."""
+    token = await _get_token()
+    if not token:
+        raise RuntimeError("Authentification FadPro impossible")
+    url = f"{FADPRO_BASE}/fad/api/b2b/search"
+    return await _fadpro_get_json(url, {"designation": designation}, token)
+
+
+async def _fadpro_get_json(url: str, params: Dict, token: str) -> List[Dict]:
+    """Shared GET helper with auto re-auth and normalisation."""
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
     try:
         async with httpx.AsyncClient(verify=False, timeout=30.0) as cl:
             r = await cl.get(url, params=params, headers=headers)
             if r.status_code == 401:
-                token = await _get_token(force=True)
-                headers["Authorization"] = f"Bearer {token}"
+                new_token = await _get_token(force=True)
+                headers["Authorization"] = f"Bearer {new_token}"
                 r = await cl.get(url, params=params, headers=headers)
             if r.status_code != 200:
-                logger.warning(f"FadPro niv-search failed: {r.status_code} {r.text[:200]}")
+                logger.warning(f"FadPro GET {url} → {r.status_code} {r.text[:200]}")
                 return []
             data = r.json()
             if not isinstance(data, list):
                 return []
             return [_normalize_item(it) for it in data]
     except (httpx.RequestError, ValueError) as e:
-        logger.warning(f"FadPro niv-search error: {e}")
+        logger.warning(f"FadPro GET error: {e}")
         return []
 
 
