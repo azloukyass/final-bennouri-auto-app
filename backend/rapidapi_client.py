@@ -64,19 +64,43 @@ async def vin_lookup(vin: str) -> Optional[Dict]:
         return None
 
 
-async def search_oem(model_id: int, search_param: str, lang_id: int = LANG_FR) -> List[Dict]:
-    """Search OEM parts for a vehicle by free-text search-param.
-    Returns list of {articleOemNo, articleProductName} normalized to {ref, name}."""
-    sp = (search_param or "").strip()
-    if not sp or not model_id:
+async def list_vehicles_for_model(model_id: int, lang_id: int = LANG_FR,
+                                   country_filter_id: int = 63) -> List[Dict]:
+    """Step preceding search_oem: resolve a TecDoc modelId to its concrete
+    vehicleId variants (motor / construction interval). Returns the raw
+    vehicle list as a list of {vehicleId, typeEngineName, …}.
+    """
+    if not model_id:
         return []
-    # URL-encode the search-param to be safe (spaces, accents)
-    sp_enc = httpx.QueryParams({"q": sp}).get("q")  # safe-ish quoting
+    url = (
+        f"{API_BASE}/types/type-id/{TYPE_ID}/list-vehicles-id/{model_id}"
+        f"/lang-id/{lang_id}/country-filter-id/{country_filter_id}"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as cl:
+            r = await cl.get(url, headers=_headers())
+            if r.status_code != 200:
+                logger.warning(f"RapidAPI list-vehicles → {r.status_code}: {r.text[:200]}")
+                return []
+            data = r.json()
+            return data if isinstance(data, list) else []
+    except Exception as e:
+        logger.warning(f"RapidAPI list-vehicles error: {e}")
+        return []
+
+
+async def search_oem(vehicle_id: int, search_param: str, lang_id: int = LANG_FR) -> List[Dict]:
+    """Search OEM parts for a *vehicleId* by free-text search-param.
+    The vehicleId is obtained via list_vehicles_for_model().
+    Returns list of {ref, name}."""
+    sp = (search_param or "").strip()
+    if not sp or not vehicle_id:
+        return []
     import urllib.parse
     sp_enc = urllib.parse.quote(sp, safe="")
     url = (
         f"{API_BASE}/articles-oem/selecting-oem-parts-vehicle-modification-description-product-group"
-        f"/type-id/{TYPE_ID}/vehicle-id/{model_id}/lang-id/{lang_id}/search-param/{sp_enc}"
+        f"/type-id/{TYPE_ID}/vehicle-id/{vehicle_id}/lang-id/{lang_id}/search-param/{sp_enc}"
     )
     try:
         async with httpx.AsyncClient(timeout=30.0) as cl:

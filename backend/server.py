@@ -31,6 +31,7 @@ from email_service import send_welcome_email, send_order_confirmation, send_cont
 from rapidapi_client import (
     vin_lookup as rapid_vin_lookup,
     search_oem as rapid_search_oem,
+    list_vehicles_for_model as rapid_list_vehicles,
     find_article_by_oem as rapid_find_article_by_oem,
     article_complete_details as rapid_article_details,
 )
@@ -831,14 +832,38 @@ async def oem_stock_search(
     if len(query) < 2:
         raise HTTPException(400, "Recherche trop courte (min. 2 caractères)")
 
-    # 1. OEM refs from TecDoc (with cache)
+    # 0. Resolve modelId → vehicleId (TecDoc requires the concrete vehicle variant)
+    veh_cache_key = {"model_id": model_id, "lang_id": lang_id}
+    veh_cached = await db.tecdoc_vehicle_cache.find_one(veh_cache_key, {"_id": 0, "cached_at": 0})
+    if veh_cached and veh_cached.get("vehicle_id"):
+        vehicle_id = veh_cached["vehicle_id"]
+    else:
+        vehicles = await rapid_list_vehicles(model_id, lang_id)
+        if not vehicles:
+            raise HTTPException(404, f"Aucune variante véhicule trouvée pour modelId={model_id}")
+        # Take the first vehicleId variant (most recent / default)
+        vehicle_id = vehicles[0].get("vehicleId")
+        if not vehicle_id:
+            raise HTTPException(502, "Réponse TecDoc invalide (vehicleId manquant)")
+        await db.tecdoc_vehicle_cache.update_one(
+            veh_cache_key,
+            {"$set": {
+                **veh_cache_key,
+                "vehicle_id": vehicle_id,
+                "variants": [v.get("vehicleId") for v in vehicles if v.get("vehicleId")],
+                "cached_at": datetime.now(timezone.utc).isoformat(),
+            }},
+            upsert=True,
+        )
+
+    # 1. OEM refs from TecDoc (with cache, keyed by vehicleId)
     key_q = query.lower()
-    cache_key = {"model_id": model_id, "lang_id": lang_id, "q": key_q}
+    cache_key = {"vehicle_id": vehicle_id, "lang_id": lang_id, "q": key_q}
     cached = await db.tecdoc_oem_cache.find_one(cache_key, {"_id": 0, "cached_at": 0})
     if cached:
         oem_items = cached.get("items", [])
     else:
-        oem_items = await rapid_search_oem(model_id, query, lang_id)
+        oem_items = await rapid_search_oem(vehicle_id, query, lang_id)
         await db.tecdoc_oem_cache.update_one(
             cache_key,
             {"$set": {
@@ -851,7 +876,7 @@ async def oem_stock_search(
         )
 
     if not oem_items:
-        return {"query": query, "model_id": model_id, "checked": 0, "count": 0, "items": []}
+        return {"query": query, "model_id": model_id, "vehicle_id": vehicle_id, "checked": 0, "count": 0, "items": []}
 
     # Deduplicate OEM refs while preserving order and the friendly name
     seen = set()
@@ -928,6 +953,7 @@ async def oem_stock_search(
     return {
         "query": query,
         "model_id": model_id,
+        "vehicle_id": vehicle_id,
         "checked": checked,
         "count": len(results),
         "items": results[:limit],
