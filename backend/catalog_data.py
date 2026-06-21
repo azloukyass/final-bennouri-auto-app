@@ -269,127 +269,45 @@ CATALOG = {
             },
         ],
     },
-    "carrosserie": {
+        "carrosserie": {
         "label": "Carrosserie",
         "icon": "car-front",
         "description": "Pare-chocs, ailes, capots, portes, vitres et pièces de carrosserie.",
         "categories": [
             {
-                "slug": "partie-avant",
-                "label": "Partie avant",
-                "icon": "car-front",
-                "image": PEX(919073),
-                "sub_items": [
-                    "Pare-chocs avant", "Façade", "Aile avant", "Capot", "Pare-brise",
-                    "Traverse", "Calandre", "Berceau", "Brancard", "Plancher avant",
-                    "Protection sous caisse", "Insonorisant",
-                ],
-                "parts": [
-                    _p("CR-12001", "Pare-chocs avant", 380.000, "OEM", PEX(919073)),
-                    _p("CR-12002", "Capot moteur", 520.000, "OEM", PEX(919073)),
-                    _p("CR-12003", "Aile avant gauche", 165.000, "OEM", PEX(919073)),
-                    _p("CR-12004", "Aile avant droite", 165.000, "OEM", PEX(919073)),
-                    _p("CR-12005", "Calandre chromée", 95.000, "OEM", PEX(919073)),
-                    _p("CR-12006", "Pare-brise feuilleté", 420.000, "SAINT-GOBAIN", PEX(919073)),
-                ],
+                "slug": "av", "label": "Avant (AV)", "icon": "brake", "image": PEX(1545743), "children": [
+                {"slug": "capot-moteur", "label": "Capot moteur", "icon": "brake", "image": PEX(1545743), "children": []},
+                {"slug": "aile-av", "label": "Aile AV", "icon": "brake", "image": PEX(1545743), "children": []},
+                {
+                    "slug": "parechoc-av", "label": "Pare-choc AV", "icon": "brake", "image": PEX(1545743), "children": [
+                    {"slug": "spoiler", "label": "Spoiler", "icon": "brake", "image": PEX(1545743), "children": []},
+                    {"slug": "grille-centrale", "label": "Grille centrale", "icon": "brake",  "image": PEX(1545743), "children": []},
+                    {"slug": "cache-antibrouillard", "label": "Cache antibrouillard", "icon": "brake", "image": PEX(1545743),
+                     "children": []},
+                ]
+                },
+                {"slug": "cache-moteur", "label": "Cache moteur", "icon": "brake", "image": PEX(1545743), "children": []},
+                {"slug": "calandre", "label": "Calandre", "icon": "brake",  "image": PEX(1545743), "children": []},
+                {"slug": "plage-av", "label": "Plage AV",  "icon": "brake", "image": PEX(1545743), "children": []},
+                {"slug": "support-plage", "label": "Support plage", "icon": "brake", "image": PEX(1545743), "children": []},
+                {"slug": "traverse-sup", "label": "Traverse supérieure", "icon": "brake", "image": PEX(1545743), "children": []},
+                {"slug": "traverse-sup-inf", "label": "Traverse Sup/Inf", "icon": "brake", "image": PEX(1545743), "children": []},
+                {"slug": "berceau", "label": "Berceau", "icon": "brake", "image": PEX(1545743), "children": []},
+                {"slug": "pare-boue-av", "label": "Pare-boue AV", "icon": "brake", "image": PEX(1545743), "children": []},
+                {"slug": "support-parechoc-av", "label": "Support pare-choc AV", "icon": "brake", "image": PEX(1545743), "children": []},
+                {"slug": "porte-av", "label": "Porte AV", "icon": "brake", "image": PEX(1545743), "children": []},
+                {"slug": "support-parachoc-av2", "label": "Support paracloc AV", "icon": "brake", "image": PEX(1545743), "children": []},
+            ]
             },
             {
-                "slug": "partie-arriere",
-                "label": "Partie arrière",
-                "icon": "car-back",
-                "image": PEX(112460),
-                "sub_items": [
-                    "Pare-chocs arrière", "Plancher arrière", "Cloison de cabine / séparation arrière",
-                    "Volet / porte", "Aile arrière", "Lunette", "Soubassement", "Custode",
-                    "Garniture", "Serrure", "Monogramme", "Attelage de remorque et faisceaux",
-                ],
-                "parts": [
-                    _p("CR-13001", "Pare-chocs arrière", 340.000, "OEM", PEX(112460)),
-                    _p("CR-13002", "Hayon arrière", 580.000, "OEM", PEX(112460)),
-                    _p("CR-13003", "Aile arrière gauche", 195.000, "OEM", PEX(919073)),
-                    _p("CR-13004", "Lunette arrière", 280.000, "SAINT-GOBAIN", PEX(112460)),
-                    _p("CR-13005", "Serrure de hayon", 78.000, "FEBI", PEX(244553)),
-                ],
-            },
-            {
-                "slug": "partie-laterale",
-                "label": "Partie latérale",
-                "icon": "car-side",
-                "image": PEX(1638459),
-                "sub_items": [
-                    "Pied avant", "Bas de caisse", "Pied central",
-                    "Panneau de coté", "Vitre latérale fixe",
-                ],
-                "parts": [
-                    _p("CR-PL-001", "Bas de caisse gauche", 145.000, "OEM", PEX(1638459)),
-                    _p("CR-PL-002", "Bas de caisse droit", 145.000, "OEM", PEX(1638459)),
-                    _p("CR-PL-003", "Panneau de côté", 220.000, "OEM", PEX(1638459)),
-                    _p("CR-PL-004", "Vitre latérale fixe", 95.000, "SAINT-GOBAIN", PEX(1638459)),
-                ],
-            },
-            {
-                "slug": "portes-avant",
-                "label": "Portes avant et garnissage",
-                "icon": "door",
-                "image": PEX(1638459),
-                "sub_items": [
-                    "Portes avant", "Vitres de porte avant", "Commande de porte avant",
-                    "Garnissage de porte avant", "Rétroviseurs",
-                ],
-                "parts": [
-                    _p("CR-14001", "Porte avant gauche", 480.000, "OEM", PEX(1638459)),
-                    _p("CR-14002", "Porte avant droite", 480.000, "OEM", PEX(1638459)),
-                    _p("CR-14003", "Vitre de porte avant", 145.000, "SAINT-GOBAIN", PEX(1638459)),
-                    _p("CR-14004", "Poignée extérieure", 38.000, "FEBI", PEX(244553)),
-                    _p("CR-14005", "Garniture de porte", 165.000, "OEM", PEX(1638459)),
-                    _p("CR-15001", "Rétroviseur extérieur gauche", 195.000, "OEM", PEX(100650)),
-                    _p("CR-15002", "Rétroviseur extérieur droit", 195.000, "OEM", PEX(100650)),
-                ],
-            },
-            {
-                "slug": "portes-arriere",
-                "label": "Portes arrière et garnissage",
-                "icon": "door",
-                "image": PEX(1638459),
-                "sub_items": [
-                    "Portes arrière", "Vitres de porte arrière",
-                    "Commande de porte arrière", "Garnissage de porte arrière",
-                ],
-                "parts": [
-                    _p("CR-PA-001", "Porte arrière gauche", 460.000, "OEM", PEX(1638459)),
-                    _p("CR-PA-002", "Porte arrière droite", 460.000, "OEM", PEX(1638459)),
-                    _p("CR-PA-003", "Vitre de porte arrière", 135.000, "SAINT-GOBAIN", PEX(1638459)),
-                    _p("CR-PA-004", "Garnissage porte arrière", 155.000, "OEM", PEX(1638459)),
-                ],
-            },
-            {
-                "slug": "pavillon",
-                "label": "Ensemble pavillon et garnissage",
-                "icon": "roof",
-                "image": PEX(1429775),
-                "sub_items": [
-                    "Pavillon", "Arc de pavillon", "Garnitures du pavillon", "Toit ouvrant / capote",
-                ],
-                "parts": [
-                    _p("CR-16001", "Garniture de pavillon", 240.000, "OEM", PEX(1429775)),
-                    _p("CR-16002", "Mécanisme toit ouvrant", 580.000, "OEM", PEX(1429775)),
-                    _p("CR-16003", "Antenne de toit", 38.000, "HIRSCHMANN", PEX(1429775)),
-                    _p("CR-16004", "Barres de toit", 165.000, "THULE", PEX(1429775)),
-                ],
-            },
-            {
-                "slug": "caisse",
-                "label": "Caisse",
-                "icon": "car-body",
-                "image": PEX(1638459),
-                "sub_items": [
-                    "Caisse nue", "Obturateurs de caisse", "Plateau-cabine", "Personnalisation",
-                ],
-                "parts": [
-                    _p("CR-CA-001", "Obturateur de caisse", 28.000, "OEM", PEX(1638459)),
-                    _p("CR-CA-002", "Plateau cabine", 320.000, "OEM", PEX(1638459)),
-                    _p("CR-CA-003", "Kit personnalisation", 180.000, "OEM", PEX(1638459)),
-                ],
+                "slug": "ar", "label": "Arrière (AR)", "icon": "brake",  "image": PEX(1545743), "children": [
+                {"slug": "parechoc-ar", "label": "Pare-choc AR", "icon": "brake", "image": PEX(1545743), "children": []},
+                {"slug": "malle-ar", "label": "Malle AR",  "icon": "brake", "image": PEX(1545743), "children": []},
+                {"slug": "traverse-ar", "label": "Traverse AR", "icon": "brake", "image": PEX(1545743), "children": []},
+                {"slug": "porte-ar", "label": "Porte AR", "icon": "brake", "image": PEX(1545743), "children": []},
+                {"slug": "support-parechoc-ar", "label": "Support pare-choc AR", "icon": "brake", "image": PEX(1545743), "children": []},
+                {"slug": "jeep-ar", "label": "Jeep AR",  "icon": "brake", "image": PEX(1545743), "children": []},
+            ]
             },
         ],
     },
