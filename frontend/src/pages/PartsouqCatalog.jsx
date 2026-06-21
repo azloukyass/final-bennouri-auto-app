@@ -214,6 +214,11 @@ export default function PartsouqCatalog() {
               Rechercher
             </button>
           </form>
+          <p className="mt-1.5 text-[11px] text-slate-500">
+            Astuce&nbsp;: saisissez plusieurs mots (ex.&nbsp;
+            <span className="font-mono-vin">kit chaine distribution</span>) — chaque mot
+            est cherché séparément et les résultats sont fusionnés.
+          </p>
           {!results && !loadingSearch && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 inline-flex items-center gap-1">

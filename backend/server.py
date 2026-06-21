@@ -856,10 +856,14 @@ async def oem_stock_search(
             upsert=True,
         )
 
-    # 1. OEM refs from TecDoc — query may be a comma-separated list of keywords;
-    # each keyword is searched separately at TecDoc (the API matches single words best),
-    # results are merged + deduped.
-    keywords = [k.strip() for k in query.split(",") if k.strip()]
+    # 1. OEM refs from TecDoc — query may be a comma- OR whitespace-separated list of
+    # keywords; each keyword is searched separately at TecDoc (the API matches single
+    # words best, multi-word phrases like "kit chaine" often return 0 hits), results
+    # are merged + deduped so the user sees the union of all matches.
+    import re
+    raw_tokens = [t.strip() for t in re.split(r"[,\s]+", query) if t.strip()]
+    # Drop noise tokens that are too short to be meaningful
+    keywords = [t for t in raw_tokens if len(t) >= 2]
     if not keywords:
         keywords = [query]
 
@@ -1222,7 +1226,18 @@ async def on_startup():
     await db.partsouq_cache.create_index("vin", unique=True)
     await db.partsouq_subgroups.create_index([("vin", 1), ("cid", 1)], unique=True)
     await db.tecdoc_vehicles.create_index("vin", unique=True)
-    await db.tecdoc_oem_cache.create_index([("model_id", 1), ("lang_id", 1), ("q", 1)], unique=True)
+    await db.tecdoc_oem_cache.create_index(
+        [("vehicle_id", 1), ("lang_id", 1), ("q", 1)],
+        unique=True,
+        partialFilterExpression={"vehicle_id": {"$exists": True}},
+        name="vehicle_id_1_lang_id_1_q_1",
+    )
+    await db.tecdoc_oem_cache.create_index(
+        [("model_id", 1), ("lang_id", 1), ("q", 1)],
+        unique=True,
+        partialFilterExpression={"model_id": {"$exists": True}},
+        name="model_id_1_lang_id_1_q_1",
+    )
     await seed_admin()
 
 
