@@ -128,16 +128,21 @@ export default function CategoryTree() {
             })}
           </div>
         ) : isLeaf ? (
-          <LeafPanel label={data.label} vehicle={vehicle} navigate={navigate} />
+          <LeafPanel
+            label={data.label}
+            searchKeyword={data.search_keyword || data.label}
+            vehicle={vehicle}
+            navigate={navigate}
+          />
         ) : null}
       </div>
     </div>
   );
 }
 
-function LeafPanel({ label, vehicle, navigate }) {
+function LeafPanel({ label, searchKeyword, vehicle, navigate }) {
   const [vinInput, setVinInput] = useState("");
-  const queryEncoded = encodeURIComponent(label);
+  const queryEncoded = encodeURIComponent(searchKeyword || label);
 
   // Auto-redirect to OEM catalog if a vehicle is already selected
   useEffect(() => {
