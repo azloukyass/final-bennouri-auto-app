@@ -856,24 +856,42 @@ async def oem_stock_search(
             upsert=True,
         )
 
-    # 1. OEM refs from TecDoc (with cache, keyed by vehicleId)
-    key_q = query.lower()
-    cache_key = {"vehicle_id": vehicle_id, "lang_id": lang_id, "q": key_q}
-    cached = await db.tecdoc_oem_cache.find_one(cache_key, {"_id": 0, "cached_at": 0})
-    if cached:
-        oem_items = cached.get("items", [])
-    else:
-        oem_items = await rapid_search_oem(vehicle_id, query, lang_id)
+    # 1. OEM refs from TecDoc — query may be a comma-separated list of keywords;
+    # each keyword is searched separately at TecDoc (the API matches single words best),
+    # results are merged + deduped.
+    keywords = [k.strip() for k in query.split(",") if k.strip()]
+    if not keywords:
+        keywords = [query]
+
+    async def search_keyword(kw: str):
+        key_q = kw.lower()
+        cache_key = {"vehicle_id": vehicle_id, "lang_id": lang_id, "q": key_q}
+        cached = await db.tecdoc_oem_cache.find_one(cache_key, {"_id": 0, "cached_at": 0})
+        if cached:
+            return cached.get("items", [])
+        items = await rapid_search_oem(vehicle_id, kw, lang_id)
         await db.tecdoc_oem_cache.update_one(
             cache_key,
             {"$set": {
                 **cache_key,
-                "count": len(oem_items),
-                "items": oem_items,
+                "count": len(items),
+                "items": items,
                 "cached_at": datetime.now(timezone.utc).isoformat(),
             }},
             upsert=True,
         )
+        return items
+
+    keyword_results = await asyncio.gather(*[search_keyword(k) for k in keywords])
+    # Merge + dedupe across all keyword searches
+    seen_oem = set()
+    oem_items = []
+    for batch in keyword_results:
+        for it in batch or []:
+            ref = (it.get("ref") or "").strip()
+            if ref and ref not in seen_oem:
+                seen_oem.add(ref)
+                oem_items.append(it)
 
     if not oem_items:
         return {"query": query, "model_id": model_id, "vehicle_id": vehicle_id, "checked": 0, "count": 0, "items": []}

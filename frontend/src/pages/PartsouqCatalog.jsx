@@ -16,6 +16,8 @@ import {
   Plus,
   Minus,
   Tag,
+  Filter,
+  X,
 } from "lucide-react";
 import { api, formatApiError, formatPrice } from "@/lib/api";
 import { useCart } from "@/context/CartContext";
@@ -37,6 +39,7 @@ export default function PartsouqCatalog() {
   const [results, setResults] = useState(null);
   const [loadingSearch, setLoadingSearch] = useState(false);
   const [error, setError] = useState("");
+  const [designationFilter, setDesignationFilter] = useState("");
 
   // Resolve VIN via RapidAPI TecDoc
   useEffect(() => {
@@ -96,6 +99,7 @@ export default function PartsouqCatalog() {
     }
     setLoadingSearch(true);
     setError("");
+    setDesignationFilter("");
     try {
       const { data } = await api.get(`/oem-stock-search`, {
         params: { model_id: tecdoc.model_id, q: query, lang_id: 6, limit: 5 },
@@ -277,7 +281,91 @@ export default function PartsouqCatalog() {
                 <p className="text-xs mt-1">Essayez un autre terme (ex: frein, pompe, filtre, embrayage…)</p>
               </div>
             ) : (
-              <StockProductGrid items={results.items} />
+              (() => {
+                const filterTerm = designationFilter.trim().toLowerCase();
+                const filteredItems = filterTerm
+                  ? (results.items || []).filter((it) => {
+                      const haystack = [
+                        it.designation,
+                        it.oem_name,
+                        it.reference,
+                        it.oem_ref,
+                        it.categorie,
+                        it.fournisseur,
+                      ]
+                        .filter(Boolean)
+                        .join(" ")
+                        .toLowerCase();
+                      return haystack.includes(filterTerm);
+                    })
+                  : results.items || [];
+                return (
+                  <>
+                    <div className="mb-5 bg-white border border-slate-200 rounded-sm p-4" data-testid="designation-filter-block">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Filter className="w-4 h-4 text-red-600" />
+                        <label
+                          htmlFor="designation-filter-input"
+                          className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-700"
+                        >
+                          Filtrer par désignation
+                        </label>
+                      </div>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input
+                          id="designation-filter-input"
+                          type="text"
+                          value={designationFilter}
+                          onChange={(e) => setDesignationFilter(e.target.value)}
+                          placeholder="Ex: distribution, avant, arrière, hydraulique…"
+                          className="w-full pl-10 pr-10 py-2.5 border border-slate-300 rounded-sm text-sm focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/20"
+                          data-testid="designation-filter-input"
+                        />
+                        {designationFilter && (
+                          <button
+                            type="button"
+                            onClick={() => setDesignationFilter("")}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-red-600"
+                            data-testid="designation-filter-clear"
+                            aria-label="Effacer le filtre"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="mt-2 text-[11px] text-slate-500" data-testid="designation-filter-count">
+                        {filterTerm ? (
+                          <>
+                            <span className="font-semibold text-slate-700">{filteredItems.length}</span> sur{" "}
+                            <span className="font-semibold text-slate-700">{results.items.length}</span> article(s)
+                            correspondent à &ldquo;<span className="italic">{designationFilter}</span>&rdquo;
+                          </>
+                        ) : (
+                          <>Saisissez un mot-clé pour affiner les {results.items.length} résultat(s).</>
+                        )}
+                      </div>
+                    </div>
+
+                    {filteredItems.length === 0 ? (
+                      <div className="text-center py-12 text-slate-500" data-testid="designation-filter-empty">
+                        <Package className="w-10 h-10 mx-auto text-slate-300 mb-3" />
+                        <p className="text-sm font-semibold text-slate-700">Aucun article ne correspond au filtre</p>
+                        <button
+                          type="button"
+                          onClick={() => setDesignationFilter("")}
+                          className="mt-3 text-xs text-red-600 hover:underline font-semibold"
+                          data-testid="designation-filter-reset"
+                        >
+                          Réinitialiser le filtre
+                        </button>
+                      </div>
+                    ) : (
+                      <StockProductGrid items={filteredItems} />
+                    )}
+                  </>
+                );
+              })()
             )}
           </>
         )}

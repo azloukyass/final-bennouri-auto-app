@@ -54,6 +54,13 @@ Build a French-language auto parts e-commerce platform "BENNOURI Pièces Auto" f
 - **Stage 2** (Click subgroup): 2 ScrapingBee calls extract parts table with columns `Numéro · Nom · Code · Remplacement · Remarque`, cached by `{vin, cid}`
 - Verified for Renault Clio IV VIN `VF15R0K0H48649991` → 67 groups, 189 subgroups, 9 OEM parts in "Water pump" (matching user-provided sample exactly)
 
+### Designation Filter on OEM Catalog (2026-06-21)
+- Added local "Filtrer par désignation" input on `PartsouqCatalog.jsx` to narrow down multi-keyword OEM search results (e.g. type "boitier", "distribution", "support" to filter aggregated items in-memory)
+- Filters across `designation`, `oem_name`, `reference`, `oem_ref`, `categorie`, `fournisseur` (case-insensitive substring match)
+- Includes count badge (`X sur Y articles`), clear (`X`) button, empty state with "Réinitialiser le filtre" CTA
+- Auto-resets when a new TecDoc search is fired
+- Verified end-to-end with admin@bennouri.com on VIN `WVWZZZ1KZ8W123456`, query `filtre` (2 items): "boitier"→1, "support"→1, "huile"→0
+
 ## Prioritized Backlog
 ### P1
 - Real payment integration (Stripe — Visa/Mastercard) — keys ready in environment
