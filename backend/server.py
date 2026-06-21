@@ -887,11 +887,17 @@ async def oem_stock_search(
         return items
 
     keyword_results = await asyncio.gather(*[search_keyword(k) for k in keywords])
-    # Merge + dedupe across all keyword searches
+    # Round-robin merge so every keyword is fairly represented before the candidate
+    # cap kicks in. Without this, a keyword that returns 100 OEM refs would push out
+    # all refs from a second keyword (e.g. "kit chaine" would only show "kit" hits).
     seen_oem = set()
     oem_items = []
-    for batch in keyword_results:
-        for it in batch or []:
+    max_len = max((len(b or []) for b in keyword_results), default=0)
+    for i in range(max_len):
+        for batch in keyword_results:
+            if i >= len(batch or []):
+                continue
+            it = batch[i]
             ref = (it.get("ref") or "").strip()
             if ref and ref not in seen_oem:
                 seen_oem.add(ref)
@@ -903,6 +909,9 @@ async def oem_stock_search(
     # Deduplicate OEM refs while preserving order and the friendly name
     seen = set()
     candidates = []
+    # Scale the candidate cap with the number of keywords so multi-word queries
+    # like "kit chaine distribution" can return hits from each keyword.
+    candidate_cap = max(20, 20 * len(keywords))
     for it in oem_items:
         ref = (it.get("ref") or "").strip()
         if not ref or ref in seen:
@@ -910,7 +919,7 @@ async def oem_stock_search(
         seen.add(ref)
         candidates.append({"ref": ref, "oem_name": it.get("name") or ""})
         # Hard cap candidates to avoid ingress timeout (502)
-        if len(candidates) >= 20:
+        if len(candidates) >= candidate_cap:
             break
 
     # 2. Multi-supplier (FadPro + Copia + PartsPro) lookups with concurrency cap

@@ -102,7 +102,7 @@ export default function PartsouqCatalog() {
     setDesignationFilter("");
     try {
       const { data } = await api.get(`/oem-stock-search`, {
-        params: { model_id: tecdoc.model_id, q: query, lang_id: 6, limit: 5 },
+        params: { model_id: tecdoc.model_id, q: query, lang_id: 6, limit: 50 },
       });
       setResults(data);
     } catch (err) {
