@@ -949,29 +949,44 @@ async def oem_stock_search(
                 seen_oem.add(ref)
                 oem_items.append(it)
 
-    # Relevance filter (split mode only) — keep only OEM entries whose TecDoc
-    # `articleProductName` contains at least one significant query phrase.
-    # In phrase mode (default) TecDoc already returns only matching items, so
-    # no extra filtering is needed.
-    if split:
-        import unicodedata as _ud
+    # Relevance filter — TWO modes:
+    # • Phrase mode (split=False, default):
+    #   Keep only OEM entries whose TecDoc `articleProductName` matches the
+    #   query 1:1 (case-/accent-/whitespace-insensitive equality). This guarantees
+    #   that searching for e.g. "Support moteur" returns ONLY items literally
+    #   named "Support moteur", not "Support moteur D" or "Suspension, boîte
+    #   automatique / Support moteur".
+    # • Split mode (split=True):
+    #   Keep OEM entries whose name contains at least one significant query
+    #   phrase (looser, used for "Kit chaîne" multi-keyword unions).
+    import unicodedata as _ud
+    import re as _re2
 
-        def _norm(s: str) -> str:
-            return "".join(c for c in _ud.normalize("NFD", s.lower()) if _ud.category(c) != "Mn")
+    def _norm(s: str) -> str:
+        s = "".join(c for c in _ud.normalize("NFD", s.lower()) if _ud.category(c) != "Mn")
+        return _re2.sub(r"\s+", " ", s).strip()
 
+    if not split:
+        # Strict 1:1 match
+        target = _norm(query)
+        relevant = [it for it in oem_items if _norm(it.get("name") or "") == target]
+        # If strict match wipes everything out, leave items untouched so the
+        # caller can see what TecDoc actually returned (debug-friendly fallback).
+        if relevant:
+            oem_items = relevant
+        else:
+            oem_items = []
+    else:
+        # Looser phrase containment for split mode
         relevance_phrases = []
         if "," in query:
             for seg in query.split(","):
                 seg = seg.strip()
-                # Multi-word phrases only when comma-separated (drops broad single-word tails)
                 if len(seg.split()) >= 2:
                     relevance_phrases.append(_norm(seg))
         if not relevance_phrases:
-            # Fallback: any significant token (single-word queries like "kit chaine")
-            import re as _re2
             raw_tokens = _re2.split(r"[,\s]+", query)
             relevance_phrases = [_norm(t) for t in raw_tokens if len(t) >= 3]
-
         if relevance_phrases:
             relevant = []
             for it in oem_items:

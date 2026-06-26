@@ -8,6 +8,8 @@ import os
 import logging
 import httpx
 from typing import Optional, List, Dict
+import re
+import unicodedata
 
 logger = logging.getLogger(__name__)
 
@@ -95,11 +97,20 @@ async def list_vehicles_for_model(model_id: int, lang_id: int = LANG_FR,
         logger.warning(f"RapidAPI list-vehicles error: {e}")
         return []
 
+def _norm(s: str) -> str:
+    """Lowercase, strip accents, collapse whitespace — for exact comparisons."""
+    s = unicodedata.normalize("NFD", s or "")
+    s = "".join(c for c in s if unicodedata.category(c) != "Mn")
+    s = re.sub(r"\s+", " ", s.strip().lower())
+    return s
+
 
 async def search_oem(vehicle_id: int, search_param: str, lang_id: int = LANG_FR) -> List[Dict]:
     """Search OEM parts for a *vehicleId* by free-text search-param.
-    The vehicleId is obtained via list_vehicles_for_model().
-    Returns list of {ref, name}."""
+    Returns the raw list of {ref, name} items as TecDoc provides them.
+    Server-side relevance filtering (strict 1:1 in phrase mode, contains in
+    split mode) is handled in `/api/oem-stock-search`.
+    """
     sp = (search_param or "").strip()
     if not sp or not vehicle_id:
         return []
@@ -119,11 +130,14 @@ async def search_oem(vehicle_id: int, search_param: str, lang_id: int = LANG_FR)
             if not isinstance(data, list):
                 return []
             out = []
+            seen = set()
             for item in data:
                 oem = (item.get("articleOemNo") or "").strip()
                 name = (item.get("articleProductName") or "").strip()
-                if oem:
-                    out.append({"ref": oem, "name": name})
+                if not oem or oem in seen:
+                    continue
+                seen.add(oem)
+                out.append({"ref": oem, "name": name})
             return out
     except Exception as e:
         logger.warning(f"RapidAPI search-oem error: {e}")

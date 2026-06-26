@@ -40,25 +40,9 @@ export default function VehicleDetail() {
     }
   }, [vin, vehicle, setVehicle, navigate]);
 
-  // Poll for PartSouq background scraping result (every 6s, up to 12 attempts)
-  useEffect(() => {
-    if (!vehicle) return;
-    if (Array.isArray(vehicle.partsouq_tree) && vehicle.partsouq_tree.length > 0) return;
-    if (!vehicle.vin || vehicle.vin.startsWith("MAN-")) return;
-    let attempts = 0;
-    const interval = setInterval(async () => {
-      attempts += 1;
-      if (attempts > 12) { clearInterval(interval); return; }
-      try {
-        const { data } = await api.get(`/vin/partsouq-status/${vehicle.vin}`);
-        if (data.ready) {
-          setVehicle(data);
-          clearInterval(interval);
-        }
-      } catch { /* ignore polling failure */ }
-    }, 6000);
-    return () => clearInterval(interval);
-  }, [vehicle?.vin, vehicle?.partsouq_tree, setVehicle]);
+  // PartSouq background scraping (legacy) is best-effort and not required for
+  // the user flow — the OEM catalog now comes from TecDoc + FadPro/Copia/PartsPro.
+  // We keep the data available if cached, but no longer block or notify the UI.
 
   if (loading || !vehicle) {
     return <div className="min-h-[60vh] flex items-center justify-center text-slate-500">Chargement du véhicule…</div>;
@@ -95,14 +79,6 @@ export default function VehicleDetail() {
 
       {/* 3 category cards */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        {!(Array.isArray(vehicle.partsouq_tree) && vehicle.partsouq_tree.length > 0) && !vehicle.vin.startsWith("MAN-") && (
-          <div className="mb-8 p-4 bg-amber-50 border border-amber-200 rounded-sm flex items-center gap-3" data-testid="partsouq-loading">
-            <div className="w-5 h-5 border-2 border-amber-600 border-t-transparent rounded-full animate-spin flex-shrink-0" />
-            <div className="text-sm text-amber-900">
-              <strong>Catalogue Parts en cours de récupération…</strong> Les références OEM officielles s&apos;afficheront ici dans quelques secondes (~30-60s).
-            </div>
-          </div>
-        )}
         <div className="grid md:grid-cols-3 gap-6 bn-stagger">
           {SECTIONS.map(({ slug, label, desc, Icon, color, img }) => (
             <Link
@@ -130,47 +106,34 @@ export default function VehicleDetail() {
           ))}
         </div>
 
-        {/* PartSouq OEM catalog CTA */}
+        {/* OEM catalog CTA — uses TecDoc/RapidAPI */}
         {!vehicle.vin.startsWith("MAN-") && (
           <div className="mt-12" data-testid="partsouq-cta-section">
-            {Array.isArray(vehicle.partsouq_tree) && vehicle.partsouq_tree.length > 0 ? (
-              <Link
-                to={`/vehicule/${vehicle.vin}/catalogue-oem`}
-                className="group relative block overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-red-900 border border-slate-700 hover:border-red-500 rounded-sm transition-all"
-                data-testid="partsouq-catalog-cta"
-              >
-                <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_top_right,white,transparent_60%)]" />
-                <div className="relative p-8 sm:p-10 flex flex-col sm:flex-row items-start sm:items-center gap-6">
-                  <div className="flex-shrink-0 w-16 h-16 bg-red-600 rounded-sm flex items-center justify-center">
-                    <Database className="w-8 h-8 text-white" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.3em] text-red-300 mb-2">
-                      Catalogue OEM officiel
-                    </div>
-                    <h3 className="font-display text-2xl sm:text-3xl font-bold text-white mb-2">
-                      Explorer toutes les pièces d&apos;origine
-                    </h3>
-                    <p className="text-slate-300 text-sm">
-                      {vehicle.partsouq_tree.length} groupes —{" "}
-                      {vehicle.partsouq_tree.reduce((sum, g) => sum + (g.children?.length || 0), 0)} sous-catégories
-                      avec numéros OEM (Numéro · Nom · Code · Remplacement · Remarque)
-                    </p>
-                  </div>
-                  <ArrowRight className="w-8 h-8 text-white group-hover:translate-x-2 transition-transform flex-shrink-0" />
+            <Link
+              to={`/vehicule/${vehicle.vin}/catalogue-oem`}
+              className="group relative block overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-red-900 border border-slate-700 hover:border-red-500 rounded-sm transition-all"
+              data-testid="partsouq-catalog-cta"
+            >
+              <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_top_right,white,transparent_60%)]" />
+              <div className="relative p-8 sm:p-10 flex flex-col sm:flex-row items-start sm:items-center gap-6">
+                <div className="flex-shrink-0 w-16 h-16 bg-red-600 rounded-sm flex items-center justify-center">
+                  <Database className="w-8 h-8 text-white" />
                 </div>
-              </Link>
-            ) : (
-              <div className="bg-slate-50 border border-slate-200 rounded-sm p-6 flex items-center gap-4" data-testid="partsouq-cta-loading">
-                <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
-                <div>
-                  <div className="font-semibold text-slate-700">Catalogue OEM en cours de préparation…</div>
-                  <div className="text-xs text-slate-500 mt-1">
-                    Le catalogue complet sera disponible dans quelques instants.
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.3em] text-red-300 mb-2">
+                    Catalogue OEM officiel
                   </div>
+                  <h3 className="font-display text-2xl sm:text-3xl font-bold text-white mb-2">
+                    Explorer toutes les pièces d&apos;origine
+                  </h3>
+                  <p className="text-slate-300 text-sm">
+                    Recherche par mots-clés sur le catalogue TecDoc — disponibilité
+                    en stock en temps réel chez nos partenaires.
+                  </p>
                 </div>
+                <ArrowRight className="w-8 h-8 text-white group-hover:translate-x-2 transition-transform flex-shrink-0" />
               </div>
-            )}
+            </Link>
           </div>
         )}
       </div>
