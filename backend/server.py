@@ -828,18 +828,24 @@ async def oem_stock_search(
     q: str,
     lang_id: int = 6,
     limit: int = 5,
+    split: bool = False,
     user: dict = Depends(get_current_user),
 ):
-    """Combined OEM + FadPro lookup.
+    """Combined OEM + multi-supplier lookup.
 
     Workflow:
       1. Fetch OEM refs from TecDoc for the given model & query.
-      2. For each OEM ref, look it up in FadPro.
-      3. Return up to `limit` items that are IN STOCK with a usable price.
-
-    The frontend should call this single endpoint instead of OEM + FadPro
-    separately, so users only see articles that are actually available
-    locally with a price and "Ajouter au panier" action.
+         By default the query is sent AS-IS as a single `search-param` (phrase
+         mode) — perfect for searching TecDoc product names like
+         "Caisse à eau, radiateur".
+         When `split=true` the query is split on commas/whitespace into separate
+         keyword searches whose results are merged + deduped (used for the
+         "Kit chaîne" category where TecDoc product names don't match the
+         French shop terminology).
+      2. For each OEM ref, look it up in FadPro/Copia/PartsPro.
+      3. Return up to `limit` items, in-stock first, then out-of-stock items
+         (labelled "Hors stock" on the card) so the user still sees what's in
+         the supplier catalogue.
     """
     import asyncio
 
@@ -871,16 +877,13 @@ async def oem_stock_search(
             upsert=True,
         )
 
-    # 1. OEM refs from TecDoc — query may be a comma- OR whitespace-separated list of
-    # keywords; each keyword is searched separately at TecDoc (the API matches single
-    # words best, multi-word phrases like "kit chaine" often return 0 hits), results
-    # are merged + deduped so the user sees the union of all matches.
-    import re
-    raw_tokens = [t.strip() for t in re.split(r"[,\s]+", query) if t.strip()]
-    # Drop noise tokens that are too short to be meaningful
-    keywords = [t for t in raw_tokens if len(t) >= 2]
-    if not keywords:
-        keywords = [query]
+    # 1. OEM refs from TecDoc.
+    # Default (split=False, phrase mode): the query is sent AS-IS as a single
+    # search-param. This is what TecDoc expects for product-name searches like
+    # "Caisse à eau, radiateur".
+    # Opt-in (split=True): the query is split into individual keywords whose
+    # results are merged + deduped. Used by categories like "Kit chaîne" where
+    # the shop terminology doesn't match any TecDoc product name verbatim.
 
     async def search_keyword(kw: str):
         key_q = kw.lower()
@@ -901,7 +904,20 @@ async def oem_stock_search(
         )
         return items
 
-    keyword_results = await asyncio.gather(*[search_keyword(k) for k in keywords])
+    if not split:
+        # Phrase mode — send full query as-is
+        keywords = [query]
+        keyword_results = [await search_keyword(query)]
+    else:
+        # Split mode — break the query into keywords, search each in parallel
+        if "," in query:
+            raw_tokens = [t.strip() for t in query.split(",") if t.strip()]
+        else:
+            import re
+            raw_tokens = [t.strip() for t in re.split(r"\s+", query) if t.strip()]
+        keywords = [t for t in raw_tokens if len(t) >= 2] or [query]
+        keyword_results = await asyncio.gather(*[search_keyword(k) for k in keywords])
+
     # Round-robin merge so every keyword is fairly represented before the candidate
     # cap kicks in. Without this, a keyword that returns 100 OEM refs would push out
     # all refs from a second keyword (e.g. "kit chaine" would only show "kit" hits).
@@ -917,6 +933,38 @@ async def oem_stock_search(
             if ref and ref not in seen_oem:
                 seen_oem.add(ref)
                 oem_items.append(it)
+
+    # Relevance filter (split mode only) — keep only OEM entries whose TecDoc
+    # `articleProductName` contains at least one significant query phrase.
+    # In phrase mode (default) TecDoc already returns only matching items, so
+    # no extra filtering is needed.
+    if split:
+        import unicodedata as _ud
+
+        def _norm(s: str) -> str:
+            return "".join(c for c in _ud.normalize("NFD", s.lower()) if _ud.category(c) != "Mn")
+
+        relevance_phrases = []
+        if "," in query:
+            for seg in query.split(","):
+                seg = seg.strip()
+                # Multi-word phrases only when comma-separated (drops broad single-word tails)
+                if len(seg.split()) >= 2:
+                    relevance_phrases.append(_norm(seg))
+        if not relevance_phrases:
+            # Fallback: any significant token (single-word queries like "kit chaine")
+            import re as _re2
+            raw_tokens = _re2.split(r"[,\s]+", query)
+            relevance_phrases = [_norm(t) for t in raw_tokens if len(t) >= 3]
+
+        if relevance_phrases:
+            relevant = []
+            for it in oem_items:
+                name_norm = _norm(it.get("name") or "")
+                if any(p in name_norm for p in relevance_phrases):
+                    relevant.append(it)
+            if relevant:
+                oem_items = relevant
 
     if not oem_items:
         return {"query": query, "model_id": model_id, "vehicle_id": vehicle_id, "checked": 0, "count": 0, "items": []}
@@ -966,11 +1014,23 @@ async def oem_stock_search(
                     continue
                 if not isinstance(batch, list):
                     continue
+                # Prefer in-stock matches; if none, fall back to the first priced
+                # out-of-stock entry so the user still sees the part with a
+                # "Hors stock" label rather than nothing.
+                in_stock_pick = None
+                out_of_stock_pick = None
                 for fi in batch:
-                    if fi.get("in_stock") and fi.get("prix_tnd"):
-                        fi = {**fi, "oem_ref": c["ref"], "oem_name": c["oem_name"], "source": fi.get("source", source)}
-                        picked.append(fi)
-                        break  # 1 hit per source per OEM ref is enough
+                    if not fi.get("prix_tnd"):
+                        continue
+                    if fi.get("in_stock") and in_stock_pick is None:
+                        in_stock_pick = fi
+                        break
+                    if not fi.get("in_stock") and out_of_stock_pick is None:
+                        out_of_stock_pick = fi
+                chosen = in_stock_pick or out_of_stock_pick
+                if chosen:
+                    chosen = {**chosen, "oem_ref": c["ref"], "oem_name": c["oem_name"], "source": chosen.get("source", source)}
+                    picked.append(chosen)
             return picked
 
     results = []
@@ -995,6 +1055,11 @@ async def oem_stock_search(
                 break
         if len(results) >= limit:
             break
+
+    # Sort: in-stock items first, then by price ascending. Out-of-stock items
+    # are still shown so the user can see what's available in the supplier
+    # catalog (labelled "Hors stock" on the card).
+    results.sort(key=lambda r: (0 if r.get("in_stock") else 1, r.get("prix_tnd") or 1e9))
 
     return {
         "query": query,

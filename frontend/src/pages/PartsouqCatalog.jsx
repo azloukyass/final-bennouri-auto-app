@@ -32,6 +32,7 @@ export default function PartsouqCatalog() {
   const { vin } = useParams();
   const [searchParams] = useSearchParams();
   const initialQuery = (searchParams.get("q") || "").trim();
+  const initialSplit = searchParams.get("split") === "true";
   const { vehicle, setVehicle } = useCart();
   const [tecdoc, setTecdoc] = useState(null);
   const [loadingVin, setLoadingVin] = useState(true);
@@ -87,7 +88,7 @@ export default function PartsouqCatalog() {
     }
   }, [tecdoc, initialQuery]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const runSearch = async (q) => {
+  const runSearch = async (q, splitOverride) => {
     const query = (q || search).trim();
     if (query.length < 2) {
       toast.error("Saisissez au moins 2 caractères");
@@ -101,9 +102,10 @@ export default function PartsouqCatalog() {
     setError("");
     setDesignationFilter("");
     try {
-      const { data } = await api.get(`/oem-stock-search`, {
-        params: { model_id: tecdoc.model_id, q: query, lang_id: 6, limit: 50 },
-      });
+      const useSplit = typeof splitOverride === "boolean" ? splitOverride : initialSplit;
+      const params = { model_id: tecdoc.model_id, q: query, lang_id: 6, limit: 50 };
+      if (useSplit) params.split = "true";
+      const { data } = await api.get(`/oem-stock-search`, { params });
       setResults(data);
     } catch (err) {
       setError(formatApiError(err));
@@ -413,10 +415,15 @@ function StockProductGrid({ items }) {
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5" data-testid="stock-product-grid">
       {items.map((it, i) => {
         const q = qty[it.reference] || 1;
+        const inStock = !!it.in_stock;
         return (
           <div
             key={`${it.reference}-${i}`}
-            className="group bg-white border border-slate-200 hover:border-red-500 hover:shadow-xl transition-all rounded-sm overflow-hidden flex flex-col cursor-pointer"
+            className={`group bg-white border rounded-sm overflow-hidden flex flex-col cursor-pointer transition-all ${
+              inStock
+                ? "border-slate-200 hover:border-red-500 hover:shadow-xl"
+                : "border-slate-200 opacity-90 hover:border-slate-400 hover:shadow-lg"
+            }`}
             onClick={() => navigate(`/article/${encodeURIComponent(it.oem_ref || it.reference)}`)}
             data-testid={`stock-card-${it.reference}`}
           >
@@ -429,9 +436,15 @@ function StockProductGrid({ items }) {
               </div>
               <div className="flex items-center gap-2">
                 <SourceBadge source={it.source} />
-                <span className="inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-300 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm">
-                  <CheckCircle2 className="w-3 h-3" /> En stock
-                </span>
+                {inStock ? (
+                  <span className="inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-300 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm">
+                    <CheckCircle2 className="w-3 h-3" /> En stock
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 bg-amber-500/20 text-amber-300 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm">
+                    Hors stock
+                  </span>
+                )}
               </div>
             </div>
 
@@ -456,25 +469,29 @@ function StockProductGrid({ items }) {
                     <div className="font-display font-black text-2xl text-red-600 leading-none" data-testid={`stock-price-${it.reference}`}>
                       {formatPrice(it.prix_tnd)}
                     </div>
-                    <div className="text-[10px] uppercase tracking-wider text-slate-400 mt-1">
-                      {it.stock} disponible{it.stock > 1 ? "s" : ""}
+                    <div className={`text-[10px] uppercase tracking-wider mt-1 ${inStock ? "text-slate-400" : "text-amber-600 font-semibold"}`}>
+                      {inStock
+                        ? `${it.stock} disponible${it.stock > 1 ? "s" : ""}`
+                        : "Hors stock — sur commande"}
                     </div>
                   </div>
                   <div className="inline-flex items-center border border-slate-300 rounded-sm">
                     <button
                       onClick={(e) => { e.stopPropagation(); setQuantity(it.reference, q - 1); }}
-                      className="px-2 py-1.5 hover:bg-slate-50"
+                      className="px-2 py-1.5 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
                       data-testid={`stock-qty-minus-${it.reference}`}
                       aria-label="Diminuer"
+                      disabled={!inStock}
                     >
                       <Minus className="w-3.5 h-3.5" />
                     </button>
                     <span className="px-3 text-sm font-bold w-8 text-center">{q}</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); setQuantity(it.reference, q + 1); }}
-                      className="px-2 py-1.5 hover:bg-slate-50"
+                      className="px-2 py-1.5 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
                       data-testid={`stock-qty-plus-${it.reference}`}
                       aria-label="Augmenter"
+                      disabled={!inStock}
                     >
                       <Plus className="w-3.5 h-3.5" />
                     </button>
@@ -483,10 +500,16 @@ function StockProductGrid({ items }) {
 
                 <button
                   onClick={(e) => { e.stopPropagation(); handleAdd(it); }}
-                  className="w-full inline-flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white font-black uppercase text-xs tracking-wider px-4 py-3 rounded-sm transition-colors shadow-lg shadow-red-900/20"
+                  disabled={!inStock}
+                  className={`w-full inline-flex items-center justify-center gap-2 font-black uppercase text-xs tracking-wider px-4 py-3 rounded-sm transition-colors shadow-lg ${
+                    inStock
+                      ? "bg-red-600 hover:bg-red-700 text-white shadow-red-900/20"
+                      : "bg-slate-200 text-slate-500 cursor-not-allowed shadow-none"
+                  }`}
                   data-testid={`stock-add-cart-${it.reference}`}
                 >
-                  <ShoppingCart className="w-4 h-4" /> Ajouter au panier
+                  <ShoppingCart className="w-4 h-4" />
+                  {inStock ? "Ajouter au panier" : "Hors stock"}
                 </button>
                 <button
                   onClick={(e) => { e.stopPropagation(); navigate(`/article/${encodeURIComponent(it.oem_ref || it.reference)}`); }}

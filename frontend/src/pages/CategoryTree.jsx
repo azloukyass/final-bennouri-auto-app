@@ -131,6 +131,7 @@ export default function CategoryTree() {
           <LeafPanel
             label={data.label}
             searchKeyword={data.search_keyword || data.label}
+            splitKeywords={!!data.split_keywords}
             vehicle={vehicle}
             navigate={navigate}
           />
@@ -140,16 +141,17 @@ export default function CategoryTree() {
   );
 }
 
-function LeafPanel({ label, searchKeyword, vehicle, navigate }) {
+function LeafPanel({ label, searchKeyword, splitKeywords, vehicle, navigate }) {
   const [vinInput, setVinInput] = useState("");
   const queryEncoded = encodeURIComponent(searchKeyword || label);
+  const splitParam = splitKeywords ? "&split=true" : "";
 
   // Auto-redirect to OEM catalog if a vehicle is already selected
   useEffect(() => {
     if (vehicle?.vin) {
-      navigate(`/vehicule/${vehicle.vin}/catalogue-oem?q=${queryEncoded}`, { replace: true });
+      navigate(`/vehicule/${vehicle.vin}/catalogue-oem?q=${queryEncoded}${splitParam}`, { replace: true });
     }
-  }, [vehicle, queryEncoded, navigate]);
+  }, [vehicle, queryEncoded, splitParam, navigate]);
 
   if (vehicle?.vin) {
     return (
@@ -167,7 +169,7 @@ function LeafPanel({ label, searchKeyword, vehicle, navigate }) {
       toast.error("Le VIN doit contenir 17 caractères.");
       return;
     }
-    navigate(`/vehicule/${v}/catalogue-oem?q=${queryEncoded}`);
+    navigate(`/vehicule/${v}/catalogue-oem?q=${queryEncoded}${splitParam}`);
   };
 
   return (
