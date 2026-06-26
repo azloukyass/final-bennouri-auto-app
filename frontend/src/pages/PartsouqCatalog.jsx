@@ -415,6 +415,7 @@ function StockProductGrid({ items }) {
       {items.map((it, i) => {
         const q = qty[it.reference] || 1;
         const inStock = !!it.in_stock;
+        const hasPrice = it.prix_tnd != null && it.prix_tnd > 0;
         return (
           <div
             key={`${it.reference}-${i}`}
@@ -473,12 +474,16 @@ function StockProductGrid({ items }) {
                 <div className="flex items-end justify-between mb-3">
                   <div>
                     <div className="font-display font-black text-2xl text-red-600 leading-none" data-testid={`stock-price-${it.reference}`}>
-                      {formatPrice(it.prix_tnd)}
+                      {hasPrice ? formatPrice(it.prix_tnd) : (
+                        <span className="text-base text-slate-500 italic font-semibold">Prix sur demande</span>
+                      )}
                     </div>
                     <div className={`text-[10px] uppercase tracking-wider mt-1 ${inStock ? "text-slate-400" : "text-amber-600 font-semibold"}`}>
                       {inStock
                         ? `${it.stock} disponible${it.stock > 1 ? "s" : ""}`
-                        : "Hors stock — sur commande"}
+                        : hasPrice
+                          ? "Hors stock — sur commande"
+                          : "Hors stock — contactez-nous"}
                     </div>
                   </div>
                   <div className="inline-flex items-center border border-slate-300 rounded-sm">

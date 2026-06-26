@@ -999,21 +999,18 @@ async def oem_stock_search(
     if not oem_items:
         return {"query": query, "model_id": model_id, "vehicle_id": vehicle_id, "checked": 0, "count": 0, "items": []}
 
-    # Deduplicate OEM refs while preserving order and the friendly name
+    # Deduplicate OEM refs while preserving order and the friendly name.
+    # No cap — ALL OEM refs returned by TecDoc are checked at the suppliers.
+    # Concurrency is still capped by an asyncio.Semaphore below to avoid
+    # overwhelming the supplier APIs.
     seen = set()
     candidates = []
-    # Scale the candidate cap with the number of keywords so multi-word queries
-    # like "kit chaine distribution" can return hits from each keyword.
-    candidate_cap = max(20, 20 * len(keywords))
     for it in oem_items:
         ref = (it.get("ref") or "").strip()
         if not ref or ref in seen:
             continue
         seen.add(ref)
         candidates.append({"ref": ref, "oem_name": it.get("name") or ""})
-        # Hard cap candidates to avoid ingress timeout (502)
-        if len(candidates) >= candidate_cap:
-            break
 
     # 2. Multi-supplier (FadPro + Copia + PartsPro) lookups with concurrency cap
     sem = asyncio.Semaphore(10)
@@ -1044,20 +1041,23 @@ async def oem_stock_search(
                     continue
                 if not isinstance(batch, list):
                     continue
-                # Prefer in-stock matches; if none, fall back to the first priced
-                # out-of-stock entry so the user still sees the part with a
-                # "Hors stock" label rather than nothing.
+                # Three-tier preference per supplier:
+                #   1. In-stock items with a price (best)
+                #   2. Out-of-stock items with a price (still displayable)
+                #   3. Out-of-stock items WITHOUT a price (last resort — labelled
+                #      "Prix sur demande" in the UI so customers can still ask)
                 in_stock_pick = None
-                out_of_stock_pick = None
+                priced_oos_pick = None
+                noprice_oos_pick = None
                 for fi in batch:
-                    if not fi.get("prix_tnd"):
-                        continue
-                    if fi.get("in_stock") and in_stock_pick is None:
+                    if fi.get("in_stock") and fi.get("prix_tnd"):
                         in_stock_pick = fi
                         break
-                    if not fi.get("in_stock") and out_of_stock_pick is None:
-                        out_of_stock_pick = fi
-                chosen = in_stock_pick or out_of_stock_pick
+                    if fi.get("prix_tnd") and priced_oos_pick is None:
+                        priced_oos_pick = fi
+                    elif not fi.get("prix_tnd") and noprice_oos_pick is None:
+                        noprice_oos_pick = fi
+                chosen = in_stock_pick or priced_oos_pick or noprice_oos_pick
                 if chosen:
                     chosen = {**chosen, "oem_ref": c["ref"], "oem_name": c["oem_name"], "source": chosen.get("source", source)}
                     picked.append(chosen)
@@ -1065,7 +1065,10 @@ async def oem_stock_search(
 
     results = []
     seen_refs = set()
-    # Process in chunks so we can early-stop once we have enough hits
+    # Process in chunks of 10 to bound concurrency at the supplier APIs.
+    # We do NOT early-stop on `limit` — we want to scan every OEM ref so that
+    # users see every available item (in-stock + hors-stock). The `limit` is
+    # only applied as a final slice on the sorted result list.
     chunk_size = 10
     checked = 0
     for i in range(0, len(candidates), chunk_size):
@@ -1079,12 +1082,6 @@ async def oem_stock_search(
                     continue
                 seen_refs.add(key)
                 results.append(r)
-                if len(results) >= limit:
-                    break
-            if len(results) >= limit:
-                break
-        if len(results) >= limit:
-            break
 
     # Sort: in-stock items first, then by price ascending. Out-of-stock items
     # are still shown so the user can see what's available in the supplier
