@@ -285,14 +285,29 @@ async def get_catalog_node(section: str, path: str):
         breadcrumb.append({"slug": next_node["slug"], "label": next_node["label"]})
         node = next_node
 
+    # Helper: serialize the children list while preserving the search hints
+    # (search_keyword + split_keywords). The frontend needs these to build the
+    # correct OEM-search URL for each leaf.
+    def _ser_child(c):
+        return {
+            "slug": c.get("slug"),
+            "label": c.get("label"),
+            "image": c.get("image"),
+            "children": [_ser_child(g) for g in (c.get("children") or [])],
+            "search_keyword": c.get("search_keyword"),
+            "split_keywords": bool(c.get("split_keywords")),
+        }
+
     return {
         "section": section,
         "slug": node["slug"],
         "label": node["label"],
         "image": node.get("image"),
-        "children": node.get("children", []),
+        "children": [_ser_child(c) for c in (node.get("children") or [])],
         "parts": node.get("parts", []),
         "breadcrumb": breadcrumb,
+        "search_keyword": node.get("search_keyword"),
+        "split_keywords": bool(node.get("split_keywords")),
     }
 
 
