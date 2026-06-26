@@ -68,7 +68,7 @@ CATALOG = {
                     {"slug": "emetteur-embrayage", "label": "Émetteur embrayage", "search_keyword": "Cylindre émetteur, embrayage", "children": []},
                     {"slug": "butee-embrayage", "label": "Butée embrayage", "search_keyword": "Butée embrayage", "children": []},
                     {"slug": "volant-moteur", "label": "Volant moteur", "search_keyword": "Volant moteur", "children": []},
-                    {"slug": "filtre-boite", "label": "Filtre boîte", "search_keyword": "boite,vitesse,transmission", "children": []},
+                    {"slug": "filtre-boite", "label": "Filtre boîte", "search_keyword": "Boîte, filtre à air", "children": []},
                     {"slug": "cable-vitesse", "label": "Câble vitesse", "search_keyword": "Tirette à câble, boîte de vitesse manuelle", "children": []},
                 ],
                 "parts": [],
@@ -116,14 +116,14 @@ CATALOG = {
                 "image": PEX(1545743),
                 "children": [
                     {"slug": "av", "label": "Avant (AV)", "children": [
-                        {"slug": "plaquettes-av", "label": "Plaquettes AV", "search_keyword": "plaquette,frein", "children": []},
+                        {"slug": "plaquettes-av", "label": "Plaquettes AV", "search_keyword": "Kit de plaquettes de frein, frein à disque", "children": []},
                         {"slug": "disque-frein-av", "label": "Disque frein AV", "search_keyword": "Disque de frein", "children": []},
                         {"slug": "etrier-av", "label": "Étrier AV", "search_keyword": "Étrier", "children": []},
                         {"slug": "maitre-cylindre", "label": "Maître-cylindre", "search_keyword": "Maître-cylindre de frein", "children": []},
                         {"slug": "servo-frein", "label": "Servo de frein", "search_keyword": "servo,frein,amplificateur", "children": []},
                     ]},
                     {"slug": "ar", "label": "Arrière (AR)", "children": [
-                        {"slug": "plaquettes-ar", "label": "Plaquettes AR", "search_keyword": "plaquette,frein", "children": []},
+                        {"slug": "plaquettes-ar", "label": "Plaquettes AR", "search_keyword": "Kit de plaquettes de frein, frein à disque", "children": []},
                         {"slug": "disque-ar", "label": "Disque AR", "search_keyword": "Disque de frein", "children": []},
                         {"slug": "tambour-ar", "label": "Tambour AR", "search_keyword": "tambour,frein", "children": []},
                         {"slug": "flexible-ar", "label": "Flexible AR", "search_keyword": "flexible,frein,durite", "children": []},
@@ -306,7 +306,7 @@ CATALOG = {
                     {"slug": "spoiler", "label": "Spoiler", "icon": "brake", "image": PEX(1545743), "search_keyword": "Spoiler", "children": []},
                     {"slug": "grille-centrale", "label": "Grille centrale", "icon": "brake",  "image": PEX(1545743), "search_keyword": "grille,radiateur", "children": []},
                     {"slug": "cache-antibrouillard", "label": "Cache antibrouillard", "icon": "brake", "image": PEX(1545743),
-                     "search_keyword": "antibrouillard", "children": []},
+                     "search_keyword": "Grille de ventilation, pare-chocs", "children": []},
                 ]
                 },
                 {"slug": "cache-moteur", "label": "Cache moteur", "icon": "brake", "image": PEX(1545743), "search_keyword": "Cache moteur", "children": []},
@@ -316,7 +316,7 @@ CATALOG = {
                 {"slug": "traverse-sup", "label": "Traverse supérieure", "icon": "brake", "image": PEX(1545743), "search_keyword": "Traverse", "children": []},
                 {"slug": "traverse-sup-inf", "label": "Traverse Sup/Inf", "icon": "brake", "image": PEX(1545743), "search_keyword": "Traverse", "children": []},
                 {"slug": "berceau", "label": "Berceau", "icon": "brake", "image": PEX(1545743), "search_keyword": "Plot de berceau, Support d'agrégats", "children": []},
-                {"slug": "pare-boue-av", "label": "Pare-boue AV", "icon": "brake", "image": PEX(1545743), "search_keyword": "pare-boue", "children": []},
+                {"slug": "pare-boue-av", "label": "Pare-boue AV", "icon": "brake", "image": PEX(1545743), "search_keyword": "Garniture, passage de roue", "children": []},
                 {"slug": "support-parechoc-av", "label": "Support pare-choc AV", "icon": "brake", "image": PEX(1545743), "search_keyword": "Support, pare-chocs", "children": []},
                 {"slug": "porte-av", "label": "Porte AV", "icon": "brake", "image": PEX(1545743), "search_keyword": "Porte, Carrosserie", "children": []},
                 {"slug": "support-parachoc-av2", "label": "Support paracloc AV", "icon": "brake", "image": PEX(1545743), "search_keyword": "Support, pare-chocs", "children": []},
