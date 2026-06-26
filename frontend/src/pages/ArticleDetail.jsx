@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   ArrowLeft, ChevronRight, ImageOff, Loader2, Package, ShoppingCart,
-  Minus, Plus, ListChecks, FileText, BadgeCheck, Layers, Car, Tag,
+  Minus, Plus, ListChecks, FileText, BadgeCheck, Layers, Car, Tag, ZoomIn, X,
 } from "lucide-react";
 import { api, formatApiError, formatPrice } from "@/lib/api";
 import { useCart } from "@/context/CartContext";
@@ -27,6 +27,7 @@ export default function ArticleDetail() {
   const [tab, setTab] = useState("description");
   const [qty, setQty] = useState(1);
   const [imgError, setImgError] = useState(false);
+  const [imgZoom, setImgZoom] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -119,15 +120,27 @@ export default function ArticleDetail() {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid lg:grid-cols-[420px_1fr] gap-8 bg-white border border-slate-200 rounded-sm overflow-hidden">
           {/* Image */}
-          <div className="relative bg-gradient-to-br from-slate-50 to-slate-100 aspect-square flex items-center justify-center p-8" data-testid="article-image-container">
+          <div className="relative bg-gradient-to-br from-slate-50 to-slate-100 aspect-square flex items-center justify-center p-8 group" data-testid="article-image-container">
             {a.s3image && !imgError ? (
-              <img
-                src={a.s3image}
-                alt={a.articleProductName}
-                className="max-w-full max-h-full object-contain mix-blend-multiply"
-                onError={() => setImgError(true)}
-                data-testid="article-image"
-              />
+              <>
+                <img
+                  src={a.s3image}
+                  alt={a.articleProductName}
+                  className="max-w-full max-h-full object-contain mix-blend-multiply cursor-zoom-in transition-transform group-hover:scale-105"
+                  onError={() => setImgError(true)}
+                  onClick={() => setImgZoom(true)}
+                  data-testid="article-image"
+                />
+                <button
+                  type="button"
+                  onClick={() => setImgZoom(true)}
+                  className="absolute top-4 right-4 bg-zinc-900/85 hover:bg-red-600 text-white p-2 rounded-sm shadow-lg transition-colors opacity-0 group-hover:opacity-100"
+                  aria-label="Agrandir l'image"
+                  data-testid="article-image-zoom-btn"
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+              </>
             ) : (
               <div className="text-center text-slate-300">
                 <ImageOff className="w-20 h-20 mx-auto mb-2" />
@@ -136,7 +149,7 @@ export default function ArticleDetail() {
             )}
             {sourceLabel && (
               <div className="absolute top-4 left-4 inline-flex items-center gap-1 bg-emerald-500/95 text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-sm shadow-md">
-                <BadgeCheck className="w-3 h-3" /> En stock · {sourceLabel}
+                <BadgeCheck className="w-3 h-3" /> En stock
               </div>
             )}
           </div>
@@ -341,6 +354,35 @@ export default function ArticleDetail() {
           )}
         </div>
       </section>
+
+      {/* Image zoom overlay */}
+      {imgZoom && a.s3image && !imgError && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 sm:p-8 cursor-zoom-out"
+          onClick={() => setImgZoom(false)}
+          data-testid="article-image-zoom-overlay"
+        >
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setImgZoom(false); }}
+            className="absolute top-4 right-4 bg-white/10 hover:bg-red-600 text-white p-2.5 rounded-sm transition-colors"
+            aria-label="Fermer l'aperçu"
+            data-testid="article-image-zoom-close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          <img
+            src={a.s3image}
+            alt={a.articleProductName}
+            className="max-w-full max-h-full object-contain"
+            onClick={(e) => e.stopPropagation()}
+            data-testid="article-image-zoomed"
+          />
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-[11px] uppercase tracking-[0.3em] text-white/60 font-semibold">
+            Cliquez en dehors pour fermer
+          </div>
+        </div>
+      )}
     </div>
   );
 }

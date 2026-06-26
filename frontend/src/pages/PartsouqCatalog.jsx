@@ -381,11 +381,10 @@ export default function PartsouqCatalog() {
   );
 }
 
-/**
- * Grid of in-stock product cards from FadPro.
- * Each card supports quantity selection and "Add to cart".
- */
 function StockProductGrid({ items }) {
+  /* Grid of product cards from any supplier. Each card supports quantity
+   * selection and "Ajouter au panier". Supplier identity is intentionally
+   * hidden — only the price, brand of the part, and stock status are shown. */
   const navigate = useNavigate();
   const { add: addToCart } = useCart();
   const [qty, setQty] = useState({});
@@ -435,7 +434,6 @@ function StockProductGrid({ items }) {
                 <span className="font-mono-vin text-white">{it.oem_ref}</span>
               </div>
               <div className="flex items-center gap-2">
-                <SourceBadge source={it.source} />
                 {inStock ? (
                   <span className="inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-300 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm">
                     <CheckCircle2 className="w-3 h-3" /> En stock
@@ -450,9 +448,17 @@ function StockProductGrid({ items }) {
 
             {/* Body */}
             <div className="p-5 flex-1 flex flex-col">
-              <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-red-600 mb-1">
-                {it.fournisseur || "FadPro"}
-              </div>
+              {(() => {
+                const f = (it.fournisseur || "").toUpperCase().trim();
+                // Hide supplier names, show only real part brands (e.g. SNR, FEBI, BOSCH)
+                const SUPPLIER_NAMES = new Set(["FADPRO", "COPIA", "PARTSPRO"]);
+                if (!f || SUPPLIER_NAMES.has(f)) return null;
+                return (
+                  <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-red-600 mb-1">
+                    {it.fournisseur}
+                  </div>
+                );
+              })()}
               <h3 className="font-display font-black text-slate-900 text-base leading-tight mb-2" data-testid={`stock-name-${it.reference}`}>
                 {it.designation || it.oem_name || "—"}
               </h3>
@@ -528,15 +534,7 @@ function StockProductGrid({ items }) {
 }
 
 function SourceBadge({ source }) {
-  const map = {
-    fadpro: { label: "FadPro", cls: "bg-amber-500/20 text-amber-300" },
-    copia: { label: "Copia", cls: "bg-sky-500/20 text-sky-300" },
-    partspro: { label: "PartsPro", cls: "bg-violet-500/20 text-violet-300" },
-  };
-  const info = map[source] || { label: source || "—", cls: "bg-slate-500/20 text-slate-300" };
-  return (
-    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm ${info.cls}`} title={`Source: ${info.label}`}>
-      {info.label}
-    </span>
-  );
+  // Kept as a no-op to avoid breaking any external import. Supplier identity
+  // is intentionally hidden in the UI.
+  return null;
 }
