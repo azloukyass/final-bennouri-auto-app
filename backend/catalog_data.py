@@ -31,26 +31,24 @@ CATALOG = {
                 "image": PEX(4489732),
                 "children": [
                     {"slug": "support-moteur", "label": "Support moteur", "search_keyword": "Support moteur", "children": [
-                        {"slug": "support-boot", "label": "Support Boot", "search_keyword": "Support, Boîte automatique", "children": []},
-                        {"slug": "support-moteur-d", "label": "Support Moteur D", "search_keyword": "Support moteur", "children": []},
-                        {"slug": "support-moteur-g", "label": "Support Moteur G", "search_keyword": "Support moteur", "children": []},
+                        {"slug": "support-boot", "label": "Support Boîte", "search_keyword": "Support, Boîte automatique", "children": []},
+                        {"slug": "support-moteur-d", "label": "Support Moteur D/G", "search_keyword": "Support moteur", "children": []},
                     ]},
                     {"slug": "kit-chaine", "label": "Kit chaîne", "search_keyword": "kit,chaine,distribution", "split_keywords": True, "children": []},
-                    {"slug": "pompe-a-eau", "label": "Pompe à eau", "search_keyword": "Pompe à eau", "children": []},
+                    {"slug": "pompe-a-eau", "label": "Pompe à eau", "search_keyword": "Pompe à eau, refroidissement du moteur", "children": []},
                     {"slug": "radiateur-eau", "label": "Radiateur d'eau", "search_keyword": "Caisse à eau, radiateur", "children": []},
                     {"slug": "refrigerant", "label": "Réfrigérant", "search_keyword": "refrigerant,refroidisseur", "children": []},
                     {"slug": "joint-culasse", "label": "Joint culasse", "search_keyword": "Joint d'étanchéité, culasse", "children": []},
-                    {"slug": "radiateur-chauffage", "label": "Radiateur chauffage", "search_keyword": "chauffage, radiateur", "children": []},
+                    {"slug": "radiateur-chauffage", "label": "Radiateur chauffage", "search_keyword": "Système de chauffage", "children": []},
                     {"slug": "filtre-huile", "label": "Filtre à huile", "search_keyword": "Filtre à huile", "children": []},
                     {"slug": "filtre-air", "label": "Filtre à air", "search_keyword": "Filtre à air", "children": []},
-                    {"slug": "filtre-gazoil", "label": "Filtre gazoil", "search_keyword": "Filtre à carburant", "children": []},
-                    {"slug": "filtre-essence", "label": "Filtre à essence", "search_keyword": "Filtre à carburant", "children": []},
+                    {"slug": "filtre-gazoil", "label": "Filtre gazoil / Filtre à essence", "search_keyword": "Filtre à carburant", "children": []},
                     {"slug": "radiateur-turbo", "label": "Radiateur turbo", "search_keyword": "turbo", "children": []},
                     {"slug": "filtre-habitacle", "label": "Filtre habitacle", "search_keyword": "Filtre, air de l'habitacle", "children": []},
-                    {"slug": "turbo", "label": "Turbo", "search_keyword": "turbo", "children": []},
+                    {"slug": "turbo", "label": "Turbo", "search_keyword": "Turbocompresseur, suralimentation", "children": []},
                     {"slug": "vase-eau", "label": "Vase d'eau", "search_keyword": "Condenseur, climatisation", "children": []},
-                    {"slug": "tube-eau", "label": "Tube d'eau", "search_keyword": "tube,eau,durite", "children": []},
-                    {"slug": "pipette-eau", "label": "Pipette d'eau", "search_keyword": "pipette,raccord", "children": []},
+                    {"slug": "tube-eau", "label": "Tube d'eau", "search_keyword": "Bride de liquide de refroidissement", "children": []},
+                    {"slug": "pipette-eau", "label": "Pipette d'eau", "search_keyword": "Bride de liquide de refroidissement", "children": []},
                     {"slug": "ventilateur", "label": "Ventilateur", "search_keyword": "Ventilateur, refroidissement du moteur", "children": []},
                     {"slug": "injecteur", "label": "Injecteur", "search_keyword": "Injecteur", "children": []},
                     {"slug": "pompe-assistee", "label": "Pompe assistée", "search_keyword": "pompe", "children": []},
@@ -66,7 +64,7 @@ CATALOG = {
                     {"slug": "kit-embrayage", "label": "Kit embrayage", "search_keyword": "Kit d'embrayage", "children": []},
                     {"slug": "recepteur-embrayage", "label": "Récepteur embrayage", "search_keyword": "Cylindre récepteur, embrayage", "children": []},
                     {"slug": "emetteur-embrayage", "label": "Émetteur embrayage", "search_keyword": "Cylindre émetteur, embrayage", "children": []},
-                    {"slug": "butee-embrayage", "label": "Butée embrayage", "search_keyword": "Butée embrayage", "children": []},
+                    {"slug": "butee-embrayage", "label": "Butée embrayage", "search_keyword": "Butée de débrayage", "children": []},
                     {"slug": "volant-moteur", "label": "Volant moteur", "search_keyword": "Volant moteur", "children": []},
                     {"slug": "filtre-boite", "label": "Filtre boîte", "search_keyword": "Boîte, filtre à air", "children": []},
                     {"slug": "cable-vitesse", "label": "Câble vitesse", "search_keyword": "Tirette à câble, boîte de vitesse manuelle", "children": []},
@@ -86,17 +84,17 @@ CATALOG = {
                             {"slug": "silent-bloc", "label": "Silent bloc", "search_keyword": "silent,bloc,suspension", "children": []},
                         ]},
                         {"slug": "biellette-suspension-av", "label": "Biellette suspension AV", "search_keyword": "biellette,suspension,direction", "children": []},
-                        {"slug": "ressort-boudin-av", "label": "Ressort à boudin AV", "search_keyword": "ressort,suspension", "children": []},
+                        {"slug": "ressort-boudin-av", "label": "Ressort à boudin AV", "search_keyword": "Ressort de suspension", "children": []},
                         {"slug": "moyeu-av", "label": "Moyeu AV", "search_keyword": "Moyeu de roue", "children": []},
                         {"slug": "roulement-av", "label": "Roulement AV", "search_keyword": "Kit de roulements de roue", "children": []},
                     ]},
                     {"slug": "direction", "label": "Direction", "children": [
-                        {"slug": "toc-amortisseur", "label": "Toc amortisseur", "search_keyword": "Toc amortisseur", "children": []},
-                        {"slug": "fusee-moyeu-av", "label": "Fusée moyeu AV", "search_keyword": "moyeu,roulement", "children": []},
-                        {"slug": "cremaillere", "label": "Crémaillère", "search_keyword": "cremaillere,direction", "children": []},
+                        {"slug": "toc-amortisseur", "label": "Toc amortisseur", "search_keyword": "Kit de réparation, coupelle de suspension", "children": []},
+                        {"slug": "fusee-moyeu-av", "label": "Fusée moyeu AV", "search_keyword": "Fusée d'essieu, suspension de roue", "children": []},
+                        {"slug": "cremaillere", "label": "Crémaillère", "search_keyword": "Crémaillère de direction", "children": []},
                         {"slug": "rotule-direction", "label": "Rotule de direction", "search_keyword": "Rotule de barre de connexion", "children": []},
-                        {"slug": "biellette-direction", "label": "Biellette de direction", "search_keyword": "biellette,suspension,direction", "children": []},
-                        {"slug": "antichoc", "label": "Antichoc", "search_keyword": "antichoc,butee,suspension", "children": []},
+                        {"slug": "biellette-direction", "label": "Biellette de direction", "search_keyword": "Rotule de direction intérieure, barre de connexion", "children": []},
+                        {"slug": "antichoc", "label": "Antichoc", "search_keyword": "Butée élastique, suspension", "children": []},
                     ]},
                     {"slug": "ar", "label": "Arrière (AR)", "children": [
                         {"slug": "amortisseur-ar", "label": "Amortisseur AR", "search_keyword": "Amortisseur", "children": []},
@@ -125,10 +123,10 @@ CATALOG = {
                     {"slug": "ar", "label": "Arrière (AR)", "children": [
                         {"slug": "plaquettes-ar", "label": "Plaquettes AR", "search_keyword": "Kit de plaquettes de frein, frein à disque", "children": []},
                         {"slug": "disque-ar", "label": "Disque AR", "search_keyword": "Disque de frein", "children": []},
-                        {"slug": "tambour-ar", "label": "Tambour AR", "search_keyword": "tambour,frein", "children": []},
-                        {"slug": "flexible-ar", "label": "Flexible AR", "search_keyword": "flexible,frein,durite", "children": []},
-                        {"slug": "etrier-ar", "label": "Étrier AR", "search_keyword": "Étrier", "children": []},
-                        {"slug": "cylindre-roue", "label": "Cylindre de roue", "search_keyword": "cylindre,frein,maitre", "children": []},
+                        {"slug": "tambour-ar", "label": "Tambour AR", "search_keyword": "Tambour de frein", "children": []},
+                        {"slug": "flexible-ar", "label": "Flexible AR", "search_keyword": "Flexible de frein", "children": []},
+                        {"slug": "etrier-ar", "label": "Étrier AR", "search_keyword": "Étrier de frein", "children": []},
+                        {"slug": "cylindre-roue", "label": "Cylindre de roue", "search_keyword": "Cylindre de roue", "children": []},
                     ]},
                 ],
                 "parts": [],
@@ -145,10 +143,8 @@ CATALOG = {
                 "label": "Bougie",
                 "icon": "engine",
                 "image": PEX(4489732),
-                "children": [
-                    {"slug": "Bouton lave-vitre", "label": "Bouton lave-vitre", "children": [
-                    ]},
-                ],
+                "search_keyword": "Bougie d'allumage",
+                "children": [],
                 "parts": [],
             },
             {
@@ -156,10 +152,8 @@ CATALOG = {
                 "label": "Bobine d'allumage",
                 "icon": "gearbox",
                 "image": PEX(13065690),
-                "children": [
-                    {"slug": "Bouton lave-vitre", "label": "Bouton lave-vitre", "children": [
-                    ]},
-                ],
+                "search_keyword": "Bobine d'allumage",
+                "children": [],
                 "parts": [],
             },
             {
@@ -167,10 +161,8 @@ CATALOG = {
                 "label": "Optique G+D",
                 "icon": "suspension",
                 "image": PEX(4480456),
-                "children": [
-                    {"slug": "Bouton lave-vitre", "label": "Bouton lave-vitre", "children": [
-                    ]},
-                ],
+                "search_keyword": "Projecteur principal",
+                "children": [],
                 "parts": [],
             },
             {
@@ -178,10 +170,8 @@ CATALOG = {
                 "label": "Feu AR G+D",
                 "icon": "brake",
                 "image": PEX(1545743),
-                "children": [
-                    {"slug": "Bouton lave-vitre", "label": "Bouton lave-vitre", "children": [
-                    ]},
-                ],
+                "search_keyword": "Feu arrière",
+                "children": [],
                 "parts": [],
             },
             {
@@ -189,10 +179,8 @@ CATALOG = {
                 "label": "Feu de position",
                 "icon": "brake",
                 "image": PEX(1545743),
-                "children": [
-                    {"slug": "Bouton lave-vitre", "label": "Bouton lave-vitre", "children": [
-                    ]},
-                ],
+                "search_keyword": "Feu de position",
+                "children": [],
                 "parts": [],
             },
             {
@@ -200,10 +188,8 @@ CATALOG = {
                 "label": "Culipe bougie",
                 "icon": "brake",
                 "image": PEX(1545743),
-                "children": [
-                    {"slug": "Bouton lave-vitre", "label": "Bouton lave-vitre", "children": [
-                    ]},
-                ],
+                "search_keyword": "Connecteur de bougie d'allumage",
+                "children": [],
                 "parts": [],
             },
             {
@@ -211,10 +197,8 @@ CATALOG = {
                 "label": "Capteur ARB A'Cave",
                 "icon": "brake",
                 "image": PEX(1545743),
-                "children": [
-                    {"slug": "Bouton lave-vitre", "label": "Bouton lave-vitre", "children": [
-                    ]},
-                ],
+                "search_keyword": "Capteur, position d'arbre à cames",
+                "children": [],
                 "parts": [],
             },
             {
@@ -222,10 +206,8 @@ CATALOG = {
                 "label": "Capteur ABS",
                 "icon": "brake",
                 "image": PEX(1545743),
-                "children": [
-                    {"slug": "Bouton lave-vitre", "label": "Bouton lave-vitre", "children": [
-                    ]},
-                ],
+                "search_keyword": "Capteur, vitesse de roue",
+                "children": [],
                 "parts": [],
             },
             {
@@ -233,10 +215,8 @@ CATALOG = {
                 "label": "Antibrouillard",
                 "icon": "brake",
                 "image": PEX(1545743),
-                "children": [
-                    {"slug": "Bouton lave-vitre", "label": "Bouton lave-vitre", "children": [
-                    ]},
-                ],
+                "search_keyword": "Projecteur antibrouillard",
+                "children": [],
                 "parts": [],
             },
             {
@@ -244,10 +224,8 @@ CATALOG = {
                 "label": "Rétroviseur",
                 "icon": "brake",
                 "image": PEX(1545743),
-                "children": [
-                    {"slug": "Bouton lave-vitre", "label": "Bouton lave-vitre", "children": [
-                    ]},
-                ],
+                "search_keyword": "Rétroviseur extérieur",
+                "children": [],
                 "parts": [],
             },
             {
@@ -255,10 +233,8 @@ CATALOG = {
                 "label": "Porte Pass",
                 "icon": "brake",
                 "image": PEX(1545743),
-                "children": [
-                    {"slug": "Bouton lave-vitre", "label": "Bouton lave-vitre", "children": [
-                    ]},
-                ],
+                "search_keyword": "Serrure de porte",
+                "children": [],
                 "parts": [],
             },
             {
@@ -266,10 +242,8 @@ CATALOG = {
                 "label": "Klaxon",
                 "icon": "brake",
                 "image": PEX(1545743),
-                "children": [
-                    {"slug": "Bouton lave-vitre", "label": "Bouton lave-vitre", "children": [
-                    ]},
-                ],
+                "search_keyword": "Klaxon",
+                "children": [],
                 "parts": [],
             },
             {
@@ -277,10 +251,8 @@ CATALOG = {
                 "label": "Sonde pompe A",
                 "icon": "brake",
                 "image": PEX(1545743),
-                "children": [
-                    {"slug": "Boulon lave-vitre", "label": "Bouton lave-vitre", "children": [
-                    ]},
-                ],
+                "search_keyword": "Sonde lambda",
+                "children": [],
                 "parts": [],
             },
             {
@@ -288,6 +260,15 @@ CATALOG = {
                 "label": "Batterie",
                 "icon": "brake",
                 "image": PEX(1545743),
+                "search_keyword": "Batterie de démarrage",
+                "parts": [],
+            },
+            {
+                "slug": "bouton",
+                "label": "bouton Lave Vitre",
+                "icon": "brake",
+                "image": PEX(1545743),
+                "search_keyword": "Interrupteur, lève-vitre",
                 "parts": [],
             },
         ],
@@ -304,22 +285,19 @@ CATALOG = {
                 {
                     "slug": "parechoc-av", "label": "Pare-choc AV", "icon": "brake", "image": PEX(1545743), "search_keyword": "Pare-chocs", "children": [
                     {"slug": "spoiler", "label": "Spoiler", "icon": "brake", "image": PEX(1545743), "search_keyword": "Spoiler", "children": []},
-                    {"slug": "grille-centrale", "label": "Grille centrale", "icon": "brake",  "image": PEX(1545743), "search_keyword": "grille,radiateur", "children": []},
+                    {"slug": "grille-centrale", "label": "Grille centrale", "icon": "brake",  "image": PEX(1545743), "search_keyword": "Grille de ventilation, pare-chocs", "children": []},
                     {"slug": "cache-antibrouillard", "label": "Cache antibrouillard", "icon": "brake", "image": PEX(1545743),
-                     "search_keyword": "Grille de ventilation, pare-chocs", "children": []},
+                     "search_keyword": "Capuchon, crochet de remorquage", "children": []},
                 ]
                 },
                 {"slug": "cache-moteur", "label": "Cache moteur", "icon": "brake", "image": PEX(1545743), "search_keyword": "Cache moteur", "children": []},
-                {"slug": "calandre", "label": "Calandre", "icon": "brake",  "image": PEX(1545743), "search_keyword": "Calandre", "children": []},
+                {"slug": "calandre", "label": "Calandre", "icon": "brake",  "image": PEX(1545743), "search_keyword": "Grille de radiateur", "children": []},
                 {"slug": "plage-av", "label": "Plage AV",  "icon": "brake", "image": PEX(1545743), "search_keyword": "plage", "children": []},
                 {"slug": "support-plage", "label": "Support plage", "icon": "brake", "image": PEX(1545743), "search_keyword": "Fixation de phare", "children": []},
-                {"slug": "traverse-sup", "label": "Traverse supérieure", "icon": "brake", "image": PEX(1545743), "search_keyword": "Traverse", "children": []},
-                {"slug": "traverse-sup-inf", "label": "Traverse Sup/Inf", "icon": "brake", "image": PEX(1545743), "search_keyword": "Traverse", "children": []},
-                {"slug": "berceau", "label": "Berceau", "icon": "brake", "image": PEX(1545743), "search_keyword": "Plot de berceau, Support d'agrégats", "children": []},
+                {"slug": "berceau", "label": "Berceau", "icon": "brake", "image": PEX(1545743), "search_keyword": "Traverse", "children": []},
                 {"slug": "pare-boue-av", "label": "Pare-boue AV", "icon": "brake", "image": PEX(1545743), "search_keyword": "Garniture, passage de roue", "children": []},
                 {"slug": "support-parechoc-av", "label": "Support pare-choc AV", "icon": "brake", "image": PEX(1545743), "search_keyword": "Support, pare-chocs", "children": []},
                 {"slug": "porte-av", "label": "Porte AV", "icon": "brake", "image": PEX(1545743), "search_keyword": "Porte, Carrosserie", "children": []},
-                {"slug": "support-parachoc-av2", "label": "Support paracloc AV", "icon": "brake", "image": PEX(1545743), "search_keyword": "Support, pare-chocs", "children": []},
             ]
             },
             {
