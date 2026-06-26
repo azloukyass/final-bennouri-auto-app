@@ -674,6 +674,9 @@ POPULAR_CATEGORIES = {
         "niv1": "ELECTRIQUE",
         "niv2": "DEMARREUR / COMPOSANTS",
         "niv3": "BATTERIE",
+        # Drop ancillary parts (supports, covers) — only show actual batteries.
+        # Includes the "supp" abbreviation used by some suppliers (e.g. "SUPP BATTERIE").
+        "exclude_terms": ["support", "supp ", "cache"],
     },
     "filtre-huile": {
         "label": "Filtre Huile",
@@ -697,6 +700,8 @@ POPULAR_CATEGORIES = {
         "image": "https://images.unsplash.com/photo-1632823469850-2f77dd9c7f93?auto=format&fit=crop&w=600&q=70",
         "mode": "designation",
         "designation": "EAU RADIATEUR",
+        # Drop accessories (caps) — only show actual coolant items
+        "exclude_terms": ["bouchon"],
     },
 }
 
@@ -739,6 +744,16 @@ async def partners_category_products(
 
     # Filter: only items with adjusted price > 0
     items = [it for it in raw if it.get("prix_tnd") and it["prix_tnd"] > 0]
+
+    # Apply per-category exclusion terms (e.g. drop "Support Batterie" / "Cache Batterie"
+    # from the Batterie tile, "Bouchon" from the Eau Radiateur tile).
+    exclude_terms = [t.lower() for t in (cfg.get("exclude_terms") or [])]
+    if exclude_terms:
+        def _keep(it):
+            title = (it.get("designation") or it.get("name") or "").lower()
+            return not any(term in title for term in exclude_terms)
+        items = [it for it in items if _keep(it)]
+
     # Order: in-stock first, then price ascending
     items.sort(key=lambda x: (0 if x.get("in_stock") else 1, x.get("prix_tnd") or 1e9))
     for it in items:

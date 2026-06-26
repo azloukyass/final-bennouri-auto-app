@@ -5,9 +5,9 @@ import { api, formatApiError, formatPrice } from "@/lib/api";
 import { useCart } from "@/context/CartContext";
 
 const SOURCE_THEME = {
-  fadpro:   { name: "FadPro",   accent: "from-amber-400 to-amber-600",  ring: "ring-amber-400/40",  text: "text-amber-300",  bgChip: "bg-amber-500/15" },
-  copia:    { name: "Copia",    accent: "from-sky-400 to-sky-600",      ring: "ring-sky-400/40",    text: "text-sky-300",    bgChip: "bg-sky-500/15" },
-  partspro: { name: "PartsPro", accent: "from-violet-400 to-violet-600",ring: "ring-violet-400/40", text: "text-violet-300", bgChip: "bg-violet-500/15" },
+  fadpro:   { name: "Fournisseur", accent: "from-amber-400 to-amber-600",  ring: "ring-amber-400/40",  text: "text-amber-300",  bgChip: "bg-amber-500/15" },
+  copia:    { name: "Fournisseur", accent: "from-sky-400 to-sky-600",      ring: "ring-sky-400/40",    text: "text-sky-300",    bgChip: "bg-sky-500/15" },
+  partspro: { name: "Fournisseur", accent: "from-violet-400 to-violet-600",ring: "ring-violet-400/40", text: "text-violet-300", bgChip: "bg-violet-500/15" },
 };
 
 /**
@@ -86,14 +86,27 @@ export default function PartnersSearchModal({ open, query, categorySlug, onClose
           <div className="absolute -bottom-px left-0 right-0 h-px bg-gradient-to-r from-amber-400 via-red-500 via-sky-400 to-violet-400" />
           <div className="relative flex items-start justify-between gap-4">
             <div>
-              <div className="text-[10px] font-bold uppercase tracking-[0.4em] text-red-400 mb-1.5">Recherche partenaires</div>
+              <div className="text-[10px] font-bold uppercase tracking-[0.4em] text-red-400 mb-1.5">
+                {categorySlug ? "Catégorie populaire" : "Recherche partenaires"}
+              </div>
               <h2 className="font-display text-2xl sm:text-3xl font-black tracking-tight uppercase leading-none" data-testid="partners-search-title">
-                {query ? <>Référence <span className="font-mono-vin text-red-500">{query}</span></> : "Recherche…"}
+                {categorySlug
+                  ? <>Pièces disponibles <span className="font-mono-vin text-red-500">{categorySlug.replace(/-/g, " ")}</span></>
+                  : query
+                    ? <>Référence <span className="font-mono-vin text-red-500">{query}</span></>
+                    : "Recherche…"}
               </h2>
               <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px]">
-                <SourceLight code="fadpro" count={grouped.fadpro?.length || 0} loading={loading} />
-                <SourceLight code="copia" count={grouped.copia?.length || 0} loading={loading} />
-                <SourceLight code="partspro" count={grouped.partspro?.length || 0} loading={loading} />
+                <span className="inline-flex items-center gap-1.5 text-white/70">
+                  {loading ? (
+                    <Loader2 className="w-3 h-3 animate-spin text-red-400" />
+                  ) : (
+                    <span className="w-2 h-2 rounded-full bg-gradient-to-r from-amber-400 via-red-500 to-violet-400" />
+                  )}
+                  <span className="font-semibold">
+                    {loading ? "Recherche en cours…" : `${items.length} article${items.length > 1 ? "s" : ""} trouvé${items.length > 1 ? "s" : ""}`}
+                  </span>
+                </span>
               </div>
             </div>
             <button
@@ -112,8 +125,8 @@ export default function PartnersSearchModal({ open, query, categorySlug, onClose
           {loading && (
             <div className="py-16 text-center text-white/70" data-testid="partners-loading">
               <Loader2 className="w-8 h-8 mx-auto mb-3 text-red-500 animate-spin" />
-              <div className="text-sm">Interrogation simultanée de nos 3 partenaires…</div>
-              <div className="text-xs mt-1 text-white/40">FadPro · Copia · PartsPro</div>
+              <div className="text-sm">Interrogation simultanée de nos partenaires…</div>
+              <div className="text-xs mt-1 text-white/40">Recherche en stock chez nous</div>
             </div>
           )}
 
@@ -212,7 +225,7 @@ export default function PartnersSearchModal({ open, query, categorySlug, onClose
         <div className="bg-black/60 border-t border-white/5 px-6 py-3 text-[11px] text-white/40 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Layers className="w-3.5 h-3.5" />
-            <span>Recherche unifiée — 3 partenaires consultés en parallèle</span>
+            <span>Recherche en stock — pièces disponibles immédiatement</span>
           </div>
           <button onClick={onClose} className="text-white/60 hover:text-white font-semibold uppercase tracking-wider text-[10px]" data-testid="partners-modal-footer-close">
             Fermer
@@ -224,6 +237,8 @@ export default function PartnersSearchModal({ open, query, categorySlug, onClose
 }
 
 function SourceLight({ code, count, loading }) {
+  // Deprecated — supplier names are anonymised in the UI; kept for backward compat
+  // in case other components import it. Safe to remove once unused everywhere.
   const theme = SOURCE_THEME[code];
   if (!theme) return null;
   return (
