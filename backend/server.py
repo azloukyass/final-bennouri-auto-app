@@ -1012,8 +1012,11 @@ async def oem_stock_search(
         seen.add(ref)
         candidates.append({"ref": ref, "oem_name": it.get("name") or ""})
 
-    # 2. Multi-supplier (FadPro + Copia + PartsPro) lookups with concurrency cap
-    sem = asyncio.Semaphore(10)
+    # 2. Multi-supplier (FadPro + Copia + PartsPro) lookups with concurrency cap.
+    # Higher semaphore (25) so 25 OEM refs are checked simultaneously — keeps
+    # the total endpoint time roughly constant regardless of candidate count
+    # (was: 10 → 50 OEMs took 5 × 8s = 40s; now: 50 OEMs in ~10s).
+    sem = asyncio.Semaphore(25)
 
     async def lookup(c):
         async with sem:
@@ -1023,10 +1026,11 @@ async def oem_stock_search(
                 get_partspro().search_reference(c["ref"]),
             ]
             try:
-                # Cap each OEM-ref lookup to 8 s — prevents single slow supplier from blocking ingress
+                # 5 s timeout per OEM lookup — prevents single slow supplier from
+                # blocking ingress (Cloudflare 100s gateway limit).
                 fp, co, pp = await asyncio.wait_for(
                     asyncio.gather(*tasks, return_exceptions=True),
-                    timeout=8.0,
+                    timeout=5.0,
                 )
             except asyncio.TimeoutError:
                 logging.warning(f"Multi-supplier lookup timed out for {c['ref']}")
@@ -1063,25 +1067,29 @@ async def oem_stock_search(
                     picked.append(chosen)
             return picked
 
+    # Process ALL candidates in parallel (concurrency is bounded by the
+    # semaphore inside `lookup`). This keeps total wall-time roughly equal to
+    # `ceil(N_candidates / 25) × 5s` instead of `N_candidates × 5s` sequential.
+    # A global 60 s timeout protects against Cloudflare's 100 s gateway limit.
+    checked = len(candidates)
+    try:
+        all_results = await asyncio.wait_for(
+            asyncio.gather(*[lookup(c) for c in candidates]),
+            timeout=60.0,
+        )
+    except asyncio.TimeoutError:
+        logging.warning(f"oem-stock-search global timeout for q={query!r}")
+        all_results = []
+
     results = []
     seen_refs = set()
-    # Process in chunks of 10 to bound concurrency at the supplier APIs.
-    # We do NOT early-stop on `limit` — we want to scan every OEM ref so that
-    # users see every available item (in-stock + hors-stock). The `limit` is
-    # only applied as a final slice on the sorted result list.
-    chunk_size = 10
-    checked = 0
-    for i in range(0, len(candidates), chunk_size):
-        chunk = candidates[i:i + chunk_size]
-        checked += len(chunk)
-        chunk_results = await asyncio.gather(*[lookup(c) for c in chunk])
-        for batch in chunk_results:
-            for r in batch:
-                key = (r.get("source", ""), r["reference"])
-                if key in seen_refs:
-                    continue
-                seen_refs.add(key)
-                results.append(r)
+    for batch in all_results:
+        for r in batch:
+            key = (r.get("source", ""), r["reference"])
+            if key in seen_refs:
+                continue
+            seen_refs.add(key)
+            results.append(r)
 
     # Sort: in-stock items first, then by price ascending. Out-of-stock items
     # are still shown so the user can see what's available in the supplier
