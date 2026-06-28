@@ -105,6 +105,11 @@ export default function PartsouqCatalog() {
       const useSplit = typeof splitOverride === "boolean" ? splitOverride : initialSplit;
       const params = { model_id: tecdoc.model_id, q: query, lang_id: 6, limit: 50 };
       if (useSplit) params.split = "true";
+      // Hand the vehicle name to the backend so it can verify supplier items
+      // against piecesautos.tn compatibility lists when their title doesn't
+      // already mention the model.
+      const veh = [tecdoc.manu_name, tecdoc.model_name].filter(Boolean).join(" ").trim();
+      if (veh) params.vehicle_name = veh;
       const { data } = await api.get(`/oem-stock-search`, { params });
       setResults(data);
     } catch (err) {

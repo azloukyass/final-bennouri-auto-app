@@ -844,6 +844,7 @@ async def oem_stock_search(
     lang_id: int = 6,
     limit: int = 5,
     split: bool = False,
+    vehicle_name: str = "",
     user: dict = Depends(get_current_user),
 ):
     """Combined OEM + multi-supplier lookup.
@@ -858,11 +859,21 @@ async def oem_stock_search(
          "Kit chaîne" category where TecDoc product names don't match the
          French shop terminology).
       2. For each OEM ref, look it up in FadPro/Copia/PartsPro.
-      3. Return up to `limit` items, in-stock first, then out-of-stock items
-         (labelled "Hors stock" on the card) so the user still sees what's in
-         the supplier catalogue.
+      3. (Optional) Verify vehicle compatibility — when `vehicle_name` is
+         provided (e.g. "RENAULT CLIO IV (BH_)"), items whose supplier title
+         doesn't already mention the model are double-checked against
+         piecesautos.tn. Items that don't list the customer's vehicle in their
+         official compatibility list are dropped.
+      4. Return items, in-stock first, then out-of-stock items (labelled
+         "Hors stock" on the card).
     """
     import asyncio
+    from piecesautos_compat import (
+        fetch_compatibility as pa_fetch,
+        vehicle_tokens as pa_tokens,
+        title_matches_vehicle as pa_title_match,
+        compat_list_matches_vehicle as pa_compat_match,
+    )
 
     query = (q or "").strip()
     if len(query) < 2:
@@ -1018,6 +1029,48 @@ async def oem_stock_search(
     # (was: 10 → 50 OEMs took 5 × 8s = 40s; now: 50 OEMs in ~10s).
     sem = asyncio.Semaphore(25)
 
+    # 2bis. Vehicle-compatibility filter via piecesautos.tn.
+    # Activated only when the client passes `vehicle_name` (e.g. "RENAULT CLIO IV").
+    # Items whose supplier title contains the model token (cheap path) are
+    # kept directly; the others are double-checked against the scraped
+    # compatibility list (cached 7 days in Mongo).
+    vn = (vehicle_name or "").strip()
+    if vn:
+        # Split into manu + model: first word = manu, rest = model
+        # e.g. "RENAULT CLIO IV (BH_)" → manu="RENAULT", model="CLIO IV (BH_)"
+        bits = vn.split(maxsplit=1)
+        if len(bits) == 2:
+            manu_norm, model_toks = pa_tokens(bits[0], bits[1])
+        else:
+            manu_norm, model_toks = pa_tokens("", vn)
+    else:
+        manu_norm, model_toks = "", []
+
+    pa_sem = asyncio.Semaphore(10)
+    COMPAT_TTL = 7 * 24 * 3600  # 7 days
+
+    async def get_compat_list(ref: str):
+        """Cached piecesautos.tn compatibility fetch (per OEM ref)."""
+        if not model_toks:
+            return None  # skip filter entirely
+        cached = await db.piecesautos_compat_cache.find_one(
+            {"ref": ref}, {"_id": 0, "compat": 1, "fetched_at": 1}
+        )
+        if cached and cached.get("compat") is not None:
+            return cached["compat"]
+        async with pa_sem:
+            compat = await pa_fetch(ref)
+        await db.piecesautos_compat_cache.update_one(
+            {"ref": ref},
+            {"$set": {
+                "ref": ref,
+                "compat": compat,
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+            }},
+            upsert=True,
+        )
+        return compat
+
     async def lookup(c):
         async with sem:
             tasks = [
@@ -1065,6 +1118,23 @@ async def oem_stock_search(
                 if chosen:
                     chosen = {**chosen, "oem_ref": c["ref"], "oem_name": c["oem_name"], "source": chosen.get("source", source)}
                     picked.append(chosen)
+
+            # Vehicle-compatibility filter (only when client passed vehicle_name).
+            # Items whose supplier designation already mentions the model are
+            # kept immediately. The rest are checked against piecesautos.tn.
+            if model_toks and picked:
+                # Cheap-path first: any item that already mentions the model
+                cheap_pass = [it for it in picked if pa_title_match(it.get("designation") or "", model_toks)]
+                if cheap_pass:
+                    return cheap_pass
+                # Slow-path: scrape compatibility list (one fetch per ref, cached)
+                compat = await get_compat_list(c["ref"])
+                if compat is None:
+                    return picked  # no model_toks — shouldn't reach here
+                if not compat or pa_compat_match(compat, manu_norm, model_toks):
+                    return picked
+                # Compatibility check explicitly returned False → drop
+                return []
             return picked
 
     # Process ALL candidates in parallel (concurrency is bounded by the

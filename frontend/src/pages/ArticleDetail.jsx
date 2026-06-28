@@ -12,7 +12,6 @@ const TABS = [
   { key: "description", label: "Description", Icon: ListChecks },
   { key: "oem", label: "Références OEM", Icon: Tag },
   { key: "equivalence", label: "Equivalence", Icon: BadgeCheck },
-  { key: "doc", label: "Documentation", Icon: FileText },
   { key: "compatible", label: "Compatible", Icon: Car },
 ];
 
