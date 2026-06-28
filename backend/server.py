@@ -1025,9 +1025,51 @@ async def oem_stock_search(
 
     # 2. Multi-supplier (FadPro + Copia + PartsPro) lookups with concurrency cap.
     # Higher semaphore (25) so 25 OEM refs are checked simultaneously — keeps
-    # the total endpoint time roughly constant regardless of candidate count
-    # (was: 10 → 50 OEMs took 5 × 8s = 40s; now: 50 OEMs in ~10s).
+    # the total endpoint time roughly constant regardless of candidate count.
     sem = asyncio.Semaphore(25)
+
+    # ── Supplier-pick cache (10 min TTL) ─────────────────────────────────
+    # Caches the "chosen" item per (source, ref) so repeating the same OEM
+    # search returns the SAME items even when a supplier API is intermittently
+    # slow. Without this, results vary between runs because cross-supplier
+    # timeouts cancel partial responses.
+    SUPPLIER_CACHE_TTL_S = 600
+
+    async def cached_supplier_search(source: str, ref: str, fetcher):
+        """Return the raw supplier list for `ref`, with 10-min MongoDB cache."""
+        cached = await db.supplier_lookup_cache.find_one(
+            {"source": source, "ref": ref},
+            {"_id": 0, "items": 1, "fetched_at": 1},
+        )
+        if cached and cached.get("fetched_at"):
+            try:
+                ts = datetime.fromisoformat(cached["fetched_at"].replace("Z", ""))
+                age = (datetime.now(timezone.utc).replace(tzinfo=None) - ts).total_seconds()
+                if age < SUPPLIER_CACHE_TTL_S:
+                    return cached.get("items") or []
+            except Exception:
+                pass
+        # Fresh fetch with per-call 5s timeout
+        try:
+            items = await asyncio.wait_for(fetcher(ref), timeout=5.0)
+        except asyncio.TimeoutError:
+            return []  # don't poison the cache — try again next time
+        except Exception as e:
+            logging.warning(f"{source} fetch error for {ref}: {e}")
+            return []
+        if not isinstance(items, list):
+            items = []
+        await db.supplier_lookup_cache.update_one(
+            {"source": source, "ref": ref},
+            {"$set": {
+                "source": source,
+                "ref": ref,
+                "items": items,
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+            }},
+            upsert=True,
+        )
+        return items
 
     # 2bis. Vehicle-compatibility filter via piecesautos.tn.
     # Activated only when the client passes `vehicle_name` (e.g. "RENAULT CLIO IV").
@@ -1073,24 +1115,20 @@ async def oem_stock_search(
 
     async def lookup(c):
         async with sem:
+            # Per-supplier cached fetch — each has its own 5s timeout inside
+            # cached_supplier_search, so one slow supplier no longer kills the
+            # other two. Failed fetches return [] (not cached) so the next
+            # request retries naturally.
             tasks = [
-                fadpro_search(c["ref"]),
-                get_copia().search_reference(c["ref"]),
-                get_partspro().search_reference(c["ref"]),
+                cached_supplier_search("fadpro",   c["ref"], fadpro_search),
+                cached_supplier_search("copia",    c["ref"], lambda r: get_copia().search_reference(r)),
+                cached_supplier_search("partspro", c["ref"], lambda r: get_partspro().search_reference(r)),
             ]
-            try:
-                # 5 s timeout per OEM lookup — prevents single slow supplier from
-                # blocking ingress (Cloudflare 100s gateway limit).
-                fp, co, pp = await asyncio.wait_for(
-                    asyncio.gather(*tasks, return_exceptions=True),
-                    timeout=5.0,
-                )
-            except asyncio.TimeoutError:
-                logging.warning(f"Multi-supplier lookup timed out for {c['ref']}")
-                return []
-            except Exception as e:
-                logging.warning(f"Multi-supplier lookup failed for {c['ref']}: {e}")
-                return []
+            fp, co, pp = await asyncio.gather(*tasks, return_exceptions=True)
+            # Normalise exceptions to empty lists
+            fp = fp if isinstance(fp, list) else []
+            co = co if isinstance(co, list) else []
+            pp = pp if isinstance(pp, list) else []
             picked = []
             for batch, source in ((fp, "fadpro"), (co, "copia"), (pp, "partspro")):
                 if isinstance(batch, Exception):

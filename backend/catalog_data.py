@@ -50,7 +50,7 @@ CATALOG = {
                     {"slug": "pipette-eau", "label": "Pipette d'eau", "search_keyword": "Bride de liquide de refroidissement", "children": []},
                     {"slug": "ventilateur", "label": "Ventilateur", "search_keyword": "Ventilateur, refroidissement du moteur", "children": []},
                     {"slug": "injecteur", "label": "Injecteur", "search_keyword": "Injecteur", "children": []},
-                    {"slug": "pompe-assistee", "label": "Pompe assistée", "search_keyword": "pompe", "children": []},
+                    {"slug": "pompe-assistee", "label": "Pompe assistée", "search_keyword": "Pompe hydraulique, direction", "children": []},
                 ],
                 "parts": [],
             },
