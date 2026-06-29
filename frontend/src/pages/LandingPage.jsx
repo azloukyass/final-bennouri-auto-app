@@ -159,29 +159,8 @@ export default function LandingPage() {
               </div>
               <div className="mt-2 flex items-center justify-between text-[11px]">
                 <span className="text-white/60">17 caractères en général · <span className="text-red-400 font-semibold">{vin.length}/17</span></span>
-                <a
-                  href="#brands-section"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    document.getElementById("brands-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
-                  }}
-                  className="text-red-400 hover:text-red-300 font-semibold uppercase tracking-wider"
-                  data-testid="hero-brand-link"
-                >
-                  Recherche par marque →
-                </a>
               </div>
             </form>
-
-            <div className="mt-8">
-              <Link
-                to="/recherche-vin"
-                className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold uppercase text-sm tracking-wider px-7 py-3.5 rounded-sm transition-colors shadow-lg shadow-red-900/40"
-                data-testid="hero-cta-discover"
-              >
-                Découvrir nos produits <ArrowRight className="w-4 h-4" />
-              </Link>
-            </div>
           </div>
         </div>
       </section>
@@ -276,66 +255,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Constructeurs / Brands — WHITE bg */}
-      <section id="brands-section" className="bg-zinc-50 text-black border-y border-zinc-200" data-testid="brands-section">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between mb-8 gap-3">
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-red-600 mb-2">Constructeurs</div>
-              <h2 className="font-display font-black text-3xl sm:text-4xl text-black tracking-tight uppercase">
-                Constructeurs automobile
-              </h2>
-              <p className="text-zinc-600 mt-2 text-sm">
-                {BRANDS.length} marques · plus de {BRANDS.reduce((s, b) => s + b.models.length, 0)} modèles couverts
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-x-4 gap-y-8 sm:gap-x-6 sm:gap-y-10" data-testid="brands-grid">
-            {BRANDS.map((b) => (
-              <Link
-                key={b.slug}
-                to={`/marque/${b.slug}`}
-                className="brand-card-light group flex flex-col items-center justify-center p-3 transition-all duration-300"
-                style={{ "--brand-color": b.color }}
-                data-testid={`brand-card-${b.slug}`}
-              >
-                <div className="brand-logo-wrap relative w-full h-20 sm:h-24 flex items-center justify-center">
-                  <img
-                    src={logoUrl(b.slug)}
-                    alt={b.name}
-                    className="brand-logo max-h-full max-w-[80%] object-contain transition-all duration-300"
-                    loading="lazy"
-                    onError={(e) => {
-                      e.target.style.display = "none";
-                      const fb = e.target.parentNode.querySelector(".brand-logo-fallback");
-                      if (fb) fb.style.display = "block";
-                    }}
-                  />
-                  <span className="brand-logo-fallback font-display font-bold text-zinc-700 group-hover:text-[color:var(--brand-color)] transition-colors text-lg" style={{ display: "none" }}>
-                    {b.name}
-                  </span>
-                </div>
-                <div className="mt-3 text-[10px] sm:text-xs font-semibold text-zinc-600 group-hover:text-[color:var(--brand-color)] transition-colors uppercase tracking-wider text-center truncate w-full">
-                  {b.name}
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        <style>{`
-          .brand-card-light .brand-logo {
-            filter: grayscale(1) brightness(0.7);
-            opacity: 0.6;
-          }
-          .brand-card-light:hover .brand-logo {
-            filter: none;
-            opacity: 1;
-            transform: scale(1.12);
-          }
-        `}</style>
-      </section>
 
       {/* Final CTA strip — RED */}
       <section className="bg-red-600 text-white">

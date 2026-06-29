@@ -697,10 +697,18 @@ POPULAR_CATEGORIES = {
         "label": "Filtre Huile",
         "icon": "Droplet",
         "image": "https://images.unsplash.com/photo-1635775017492-1eb935a082a2?auto=format&fit=crop&w=600&q=70",
-        "mode": "niv",
+        # Combined sources: niv hierarchy + multiple designation searches.
+        # Results are merged + deduped by reference.
         "niv1": "FILTRATION",
         "niv2": "FILTRE HUILE",
         "niv3": "FILTRES",
+        "mode": "multi",
+        "designations": [
+            "HUILE MOTEUR",
+            "FILTRE HUILE BOITE VITESSE",
+            "HUILE FREIN",
+            "LAVE GLACE",
+        ],
     },
     "accessoires": {
         "label": "Accessoires",
@@ -716,7 +724,7 @@ POPULAR_CATEGORIES = {
         "mode": "designation",
         "designation": "EAU RADIATEUR",
         # Drop accessories (caps) — only show actual coolant items
-        "exclude_terms": ["bouchon"],
+    "exclude_terms": ["bouchon", "vase"],
     },
 }
 
@@ -735,42 +743,83 @@ async def popular_categories():
 @api.get("/partners/category-products")
 async def partners_category_products(
     slug: str,
-    limit: int = 24,
     user: dict = Depends(get_current_user),
 ):
-    """Fetch products for a popular category directly from FadPro's
-    hierarchical browse API (`searchByNivLevels`). Falls back to an empty
-    list if FadPro doesn't have any priced entries.
-    """
+    """Fetch products for a popular category from FadPro.
+    For 'filtre-huile': combines the niv-hierarchy search + 4 designation
+    searches, each capped at 50 items, then shows all of them together."""
+
     cfg = POPULAR_CATEGORIES.get(slug)
     if not cfg:
         raise HTTPException(404, f"Catégorie '{slug}' introuvable")
 
+    PER_SOURCE_CAP = 50
+    exclude_terms = [t.lower() for t in (cfg.get("exclude_terms") or [])]
+
+    def _keep(it):
+        if not exclude_terms:
+            return True
+        title = (it.get("designation") or it.get("name") or "").lower()
+        return not any(term in title for term in exclude_terms)
+
+    def _process_source(raw_batch, source_label):
+        """Keep only IN-STOCK priced items, apply exclude_terms, sort, cap to PER_SOURCE_CAP."""
+        batch = [
+            it for it in (raw_batch or [])
+            if it.get("in_stock") and it.get("prix_tnd") and it["prix_tnd"] > 0
+        ]
+        batch = [it for it in batch if _keep(it)]
+        batch.sort(key=lambda x: x.get("prix_tnd") or 1e9)
+        capped = batch[:PER_SOURCE_CAP]
+        logging.info(f"FadPro source '{source_label}' → {len(raw_batch or [])} raw, {len(batch)} in-stock filtered, {len(capped)} kept")
+        return capped
+
+    all_sources: list[list[dict]] = []
+
     try:
+        # 1. Hauptquelle (niv-Hierarchie ODER einzelne designation, je nach mode)
         if cfg.get("mode") == "designation":
-            raw = await fadpro_designation_search(cfg["designation"])
+            main_raw = await fadpro_designation_search(cfg["designation"])
+            main_label = cfg["designation"]
         else:
-            raw = await fadpro_niv_search(
+            main_raw = await fadpro_niv_search(
                 cfg["niv1"], cfg.get("niv2"), cfg.get("niv3"), cfg.get("niv4"),
             )
+            main_label = f"{cfg.get('niv1')}/{cfg.get('niv2')}/{cfg.get('niv3')}"
+        all_sources.append(_process_source(main_raw, main_label))
+
+        # 2. Zusätzliche Designation-Quellen (z.B. bei filtre-huile)
+        extra_designations = cfg.get("designations") or []
+        if extra_designations:
+            extra_results = await asyncio.gather(
+                *[fadpro_designation_search(d) for d in extra_designations],
+                return_exceptions=True,
+            )
+            for designation, batch in zip(extra_designations, extra_results):
+                if isinstance(batch, Exception):
+                    logging.warning(f"FadPro designation '{designation}' failed: {batch}")
+                    all_sources.append([])
+                    continue
+                all_sources.append(_process_source(batch, designation))
+
     except Exception as e:
         logging.warning(f"FadPro category lookup failed for {slug}: {e}")
-        raw = []
+        all_sources = all_sources or [[]]
 
-    # Filter: only items with adjusted price > 0
-    items = [it for it in raw if it.get("prix_tnd") and it["prix_tnd"] > 0]
+    # 3. Alle Quellen zusammenführen + nach `ref`/`reference` deduplizieren
+    #    (ein Artikel könnte z.B. sowohl in der Niv-Suche als auch in
+    #    "HUILE MOTEUR" auftauchen)
+    items = []
+    seen_refs = set()
+    for source_items in all_sources:
+        for it in source_items:
+            ref_key = (it.get("ref") or it.get("reference") or "").upper()
+            if ref_key and ref_key in seen_refs:
+                continue
+            if ref_key:
+                seen_refs.add(ref_key)
+            items.append(it)
 
-    # Apply per-category exclusion terms (e.g. drop "Support Batterie" / "Cache Batterie"
-    # from the Batterie tile, "Bouchon" from the Eau Radiateur tile).
-    exclude_terms = [t.lower() for t in (cfg.get("exclude_terms") or [])]
-    if exclude_terms:
-        def _keep(it):
-            title = (it.get("designation") or it.get("name") or "").lower()
-            return not any(term in title for term in exclude_terms)
-        items = [it for it in items if _keep(it)]
-
-    # Order: in-stock first, then price ascending
-    items.sort(key=lambda x: (0 if x.get("in_stock") else 1, x.get("prix_tnd") or 1e9))
     for it in items:
         it["source"] = "fadpro"
 
@@ -779,7 +828,7 @@ async def partners_category_products(
         "label": cfg["label"],
         "image": cfg.get("image"),
         "count": len(items),
-        "items": items[:limit],
+        "items": items,
     }
 
 
