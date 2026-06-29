@@ -31,6 +31,7 @@ const SUGGESTIONS = [
 export default function PartsouqCatalog() {
   const { vin } = useParams();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const initialQuery = (searchParams.get("q") || "").trim();
   const initialSplit = searchParams.get("split") === "true";
   const { vehicle, setVehicle } = useCart();
@@ -157,13 +158,24 @@ export default function PartsouqCatalog() {
       {/* Header */}
       <div className="bg-slate-900 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <Link
-            to={`/vehicule/${vin}`}
-            className="inline-flex items-center gap-1 text-sm text-slate-300 hover:text-white mb-4"
-            data-testid="back-to-vehicle"
-          >
-            <ChevronLeft className="w-4 h-4" /> Retour au véhicule
-          </Link>
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="inline-flex items-center gap-1 text-sm text-slate-300 hover:text-white"
+              data-testid="back-to-subcategories"
+            >
+              <ChevronLeft className="w-4 h-4" /> Retour aux sous-catégories
+            </button>
+            <span className="text-slate-600">·</span>
+            <Link
+              to={`/vehicule/${vin}`}
+              className="inline-flex items-center gap-1 text-sm text-slate-300 hover:text-white"
+              data-testid="back-to-vehicle"
+            >
+              <Car className="w-4 h-4" /> Véhicule
+            </Link>
+          </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wider mb-4">
             <span className="text-slate-300 font-bold">Catalogue OEM TecDoc:</span>
@@ -221,11 +233,6 @@ export default function PartsouqCatalog() {
               Rechercher
             </button>
           </form>
-          <p className="mt-1.5 text-[11px] text-slate-500">
-            Astuce&nbsp;: saisissez plusieurs mots (ex.&nbsp;
-            <span className="font-mono-vin">kit chaine distribution</span>) — chaque mot
-            est cherché séparément et les résultats sont fusionnés.
-          </p>
           {!results && !loadingSearch && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 inline-flex items-center gap-1">

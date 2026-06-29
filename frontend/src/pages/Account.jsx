@@ -44,10 +44,7 @@ const STAT_DEFS = [
 const MENU = [
   { key: "dashboard", label: "Tableau de bord", Icon: LayoutDashboard, view: "dashboard" },
   { key: "orders", label: "Mes commandes", Icon: ShoppingBag, view: "orders" },
-  { key: "favorites", label: "Mes favoris", Icon: Heart, view: "favorites" },
-  { key: "addresses", label: "Mes adresses", Icon: MapPin, view: "addresses" },
   { key: "personal", label: "Mes informations personnelles", Icon: UserCircle, view: "personal" },
-  { key: "password", label: "Changer le mot de passe", Icon: Lock, view: "password" },
 ];
 
 const RECOMMENDED = [
@@ -337,17 +334,6 @@ function DashboardView({ user, orders, setView }) {
         ))}
       </div>
 
-      {/* Quick categories */}
-      <div className="mt-8">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[0.3em] text-red-600 mb-0.5">Achetez par catégorie</div>
-            <h3 className="font-display text-lg font-bold text-slate-900">Catégories populaires</h3>
-          </div>
-        </div>
-        <QuickCategories />
-      </div>
-
       {/* Two-column section */}
       <div className="grid lg:grid-cols-2 gap-6 mt-8">
         {/* Last order */}
@@ -461,10 +447,6 @@ function DashboardView({ user, orders, setView }) {
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="mt-6">
-        <RecommendedCarousel />
       </div>
     </>
   );
