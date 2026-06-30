@@ -95,6 +95,19 @@ Build a French-language auto parts e-commerce platform "BENNOURI Pièces Auto" f
   4. Global endpoint `asyncio.wait_for` reduced from 60 s → 45 s for safety margin.
 - Verified live (iteration_4): cold-cache `GET /api/oem-stock-search?q=chaine,distribution&split=true&...` now completes in **5.12 s** (was >100 s). 14/14 tests pass; cache invariant holds (zero copia/partspro variant mismatches, 4 fresh fadpro fallback picks).
 - New regression test: `/app/backend/tests/test_oem_walltime_iteration4.py`.
+
+### Sub-Category Path Filter for /api/oem-stock-search (2026-06-30, iter_8)
+- Replaced the iter_7 strict designation-token filter (which yielded count=0 because suppliers abbreviate "distribution" → "dist") with a configurable category-path filter.
+- New module-level constant `SUBCATEGORY_CATEGORY_FILTERS: List[dict]` (`/app/backend/server.py` ~L427) maps query-token sets to required `categorie` tokens. One-line extension pattern — adding a sub-category rule is just one new dict entry. Examples for `filtre/huile` and `plaquette/frein` are commented in place.
+- `_category_filter_for_query(q)` resolves the rule by checking if any registered `query_tokens` subset matches the dedup'd query token set; returns None when no rule registered → filter bypassed.
+- Filter operates on the FadPro-supplied `categorie` field (joined niv1/niv2/niv3/niv4 from `fadpro_client.py` L86), accent/case-insensitive substring AND.
+- Verified live (iteration_8, 9/9 pass): `q='Kit,chaine,distribution'` → 2 items, all with categorie containing "moteur" + "distribution" + "composants" (e.g., `MOTEUR / DISTRIBUTION / COMPOSANTS / COURROIE / COURROIE DISTRIBUTION`). Unregistered `q='filtre,huile'` bypasses filter (count=14, no assertion).
+- New regression test: `/app/backend/tests/test_oem_category_filter_iteration8.py`.
+
+### Partial-Results Endpoint Resilience (iter_6)
+- Replaced `asyncio.gather + wait_for(45s) → all_results=[] on timeout` with `asyncio.as_completed(tasks, timeout=40s)` so whatever lookups finish by the deadline are surfaced; cold-cache q='Kit,chaine,distribution' now returns count≥1 instead of 0.
+- Capped piecesautos.tn compat scraping at `PA_COMPAT_CAP=50` and wrapped each `pa_fetch` in `asyncio.wait_for(timeout=2.0)` so a single slow ReadTimeout no longer eats the global budget.
+- Capped Copia/PartsPro at `LOCKED_SUPPLIER_CAP=60` (their per-instance asyncio.Lock serialises every call); FadPro runs unconditionally with the variant fallback for ALL candidates.
 - Wishlist / save vehicles
 - Image gallery per part (multiple angles)
 - PDF invoice export
