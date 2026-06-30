@@ -85,7 +85,6 @@ async def list_vehicles_for_model(model_id: int, lang_id: int = LANG_FR,
                 logger.warning(f"RapidAPI list-vehicles → {r.status_code}: {r.text[:200]}")
                 return []
             data = r.json()
-            # Response shape: {"modelType":"PC","countModelTypes":N,"modelTypes":[…]}
             if isinstance(data, dict):
                 items = data.get("modelTypes") or data.get("vehicles") or []
             elif isinstance(data, list):
@@ -96,6 +95,82 @@ async def list_vehicles_for_model(model_id: int, lang_id: int = LANG_FR,
     except Exception as e:
         logger.warning(f"RapidAPI list-vehicles error: {e}")
         return []
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# VIN → sra_commercial via vin-decoder-mega + intelligent vehicle-id picker
+# ──────────────────────────────────────────────────────────────────────────
+VIN_MEGA_HOST = "vin-decoder-mega.p.rapidapi.com"
+import os, re
+
+
+async def vin_mega_decode(vin: str) -> Optional[Dict]:
+    """Resolve a VIN via vin-decoder-mega — used to obtain the
+    `sra_commercial` field (e.g. "1.6 HDI 75 (MF9HW, GJ9HWC, ...)").
+    """
+    vin = (vin or "").strip().upper()
+    if not vin or len(vin) != 17:
+        return None
+    headers = {
+        "x-rapidapi-host": VIN_MEGA_HOST,
+        "x-rapidapi-key": os.environ.get("RAPIDAPI_KEY", ""),
+        "Content-Type": "application/x-www-form-urlencoded",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as cl:
+            r = await cl.post(f"https://{VIN_MEGA_HOST}/vin.php", headers=headers, data={"vin": vin})
+            if r.status_code != 200:
+                logger.warning(f"vin-mega → {r.status_code}: {r.text[:200]}")
+                return None
+            data = r.json()
+            return data if isinstance(data, dict) else None
+    except Exception as e:
+        logger.warning(f"vin-mega error: {e}")
+        return None
+
+
+def _engine_tokens(text: str) -> List[str]:
+    """Tokenise an engine description. Strips parenthesised content, lower-
+    cases everything, and normalises common manufacturer variants so that
+    'bluehdi' == 'hdi', 'tdci' stays itself, etc."""
+    if not text:
+        return []
+    # drop content inside parentheses
+    t = re.sub(r"\([^)]*\)", "", text).lower()
+    # split on whitespace
+    raw = [w for w in re.split(r"[\s,]+", t) if w]
+    out = []
+    for w in raw:
+        # normalise BlueHDi / Blue-HDi / e-HDi → hdi
+        w2 = w
+        w2 = re.sub(r"^(blue[-]?|e[-]?)", "", w2)
+        out.append(w2)
+    return out
+
+
+def pick_best_vehicle_id(vehicles: List[Dict], sra_commercial: str) -> Optional[int]:
+    """Pick the TecDoc vehicleId whose `typeEngineName` matches the
+    sra_commercial token-by-token. Returns None if no acceptable match is
+    found (caller should fall back to the first vehicle)."""
+    if not vehicles or not sra_commercial:
+        return None
+    sra_toks = _engine_tokens(sra_commercial)
+    if not sra_toks:
+        return None
+    best = None
+    best_score = 0
+    for v in vehicles:
+        eng = (v.get("typeEngineName") or "")
+        eng_toks = set(_engine_tokens(eng))
+        if not eng_toks:
+            continue
+        # Score = number of sra tokens that appear in the engine tokens
+        score = sum(1 for t in sra_toks if t in eng_toks)
+        # Strong match: every sra token is present
+        if score == len(sra_toks) and score > best_score:
+            best_score = score
+            best = v.get("vehicleId")
+    return best
 
 def _norm(s: str) -> str:
     """Lowercase, strip accents, collapse whitespace — for exact comparisons."""

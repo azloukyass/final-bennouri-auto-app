@@ -106,6 +106,10 @@ export default function PartsouqCatalog() {
       const useSplit = typeof splitOverride === "boolean" ? splitOverride : initialSplit;
       const params = { model_id: tecdoc.model_id, q: query, lang_id: 6, limit: 50 };
       if (useSplit) params.split = "true";
+      // Pass the VIN so the backend can pick the right TecDoc variant
+      // (engine-token match via sra_commercial) instead of always defaulting
+      // to the first vehicleId returned by list-vehicles-id.
+      if (vin) params.vin = vin;
       // Hand the vehicle name to the backend so it can verify supplier items
       // against piecesautos.tn compatibility lists when their title doesn't
       // already mention the model.

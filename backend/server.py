@@ -34,6 +34,8 @@ from rapidapi_client import (
     list_vehicles_for_model as rapid_list_vehicles,
     find_article_by_oem as rapid_find_article_by_oem,
     article_complete_details as rapid_article_details,
+    vin_mega_decode as rapid_vin_mega,
+    pick_best_vehicle_id as rapid_pick_vehicle_id,
 )
 
 mongo_url = os.environ["MONGO_URL"]
@@ -894,6 +896,7 @@ async def oem_stock_search(
     limit: int = 5,
     split: bool = False,
     vehicle_name: str = "",
+    vin: str = "",
     user: dict = Depends(get_current_user),
 ):
     """Combined OEM + multi-supplier lookup.
@@ -929,7 +932,12 @@ async def oem_stock_search(
         raise HTTPException(400, "Recherche trop courte (min. 2 caractères)")
 
     # 0. Resolve modelId → vehicleId (TecDoc requires the concrete vehicle variant)
-    veh_cache_key = {"model_id": model_id, "lang_id": lang_id}
+    # When `vin` is provided we use the vin-decoder-mega API to get the
+    # `sra_commercial` engine descriptor (e.g. "1.6 HDI 75 (...)") and pick
+    # the TecDoc variant whose `typeEngineName` matches token-for-token (with
+    # BlueHDi/HDi normalisation). Without a VIN, we fall back to the first
+    # variant returned by TecDoc.
+    veh_cache_key = {"model_id": model_id, "lang_id": lang_id, "vin": (vin or "").strip().upper() or None}
     veh_cached = await db.tecdoc_vehicle_cache.find_one(veh_cache_key, {"_id": 0, "cached_at": 0})
     if veh_cached and veh_cached.get("vehicle_id"):
         vehicle_id = veh_cached["vehicle_id"]
@@ -937,8 +945,22 @@ async def oem_stock_search(
         vehicles = await rapid_list_vehicles(model_id, lang_id)
         if not vehicles:
             raise HTTPException(404, f"Aucune variante véhicule trouvée pour modelId={model_id}")
-        # Take the first vehicleId variant (most recent / default)
-        vehicle_id = vehicles[0].get("vehicleId")
+
+        vehicle_id = None
+        if vin and len(vin) == 17:
+            # Get sra_commercial from vin-decoder-mega and pick the matching variant
+            mega = await rapid_vin_mega(vin)
+            sra = (mega or {}).get("sra_commercial") or ""
+            if sra:
+                matched = rapid_pick_vehicle_id(vehicles, sra)
+                if matched:
+                    vehicle_id = matched
+                    logging.info(f"VIN {vin}: matched vehicle_id={vehicle_id} via sra='{sra}'")
+                else:
+                    logging.info(f"VIN {vin}: no engine match for sra='{sra}' — using first variant")
+
+        if not vehicle_id:
+            vehicle_id = vehicles[0].get("vehicleId")
         if not vehicle_id:
             raise HTTPException(502, "Réponse TecDoc invalide (vehicleId manquant)")
         await db.tecdoc_vehicle_cache.update_one(
