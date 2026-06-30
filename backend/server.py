@@ -417,35 +417,117 @@ def _designation_has_all_tokens(desig: str, toks: List[str]) -> bool:
     return all(t in norm for t in toks)
 
 
+def _category_matches(category_str: str, requirement) -> bool:
+    """Check whether `category_str` satisfies a category requirement.
+
+    `requirement` may be either:
+      • a flat list of tokens — AND semantics (every token must appear)
+      • a list-of-lists — OR over AND-groups (at least one inner group
+        must be fully present). Used when a sub-category lives under two
+        different category paths (e.g. "Filtre carburant" → "essence" OR
+        "gasoil"; "Silentbloc" → "essieu arrière" OR "essieu avant").
+    """
+    if not requirement:
+        return True
+    if isinstance(requirement[0], list):
+        return any(_designation_has_all_tokens(category_str, group) for group in requirement)
+    return _designation_has_all_tokens(category_str, requirement)
+
+
 # ── Sub-category → required category-path tokens ─────────────────────
 # When the search query (after tokenisation & dedup) is a SUPERSET of
 # `query_tokens`, every returned item's `categorie` field (built from the
-# supplier as "niv1 / niv2 / niv3 / niv4") MUST contain ALL of
-# `required_category_tokens` (case-insensitive, accent-insensitive). Items
-# whose `categorie` is empty or missing any required token are dropped.
+# supplier as "niv1 / niv2 / niv3 / niv4") MUST satisfy the
+# `required_category_tokens` requirement (case-insensitive, accent-
+# insensitive). Items whose `categorie` is empty or fails the check are
+# dropped.
 #
-# This is the centralised place to add new sub-categories: simply append
-# a new entry below. The list is scanned top-down and the FIRST matching
-# entry wins, so put more-specific rules above generic ones.
+# `required_category_tokens` can be either:
+#   • a flat list of strings (AND — every token must appear in the path)
+#   • a list of lists (OR over AND-groups — at least one inner list must
+#     be fully present; used when a sub-category has two valid paths)
+#
+# The list is scanned top-down; the FIRST entry whose query_tokens are a
+# subset of the search query wins. Always place more-specific rules
+# (longer `query_tokens`) ABOVE generic ones to avoid shadowing.
 SUBCATEGORY_CATEGORY_FILTERS: List[dict] = [
-    # MOTEUR / DISTRIBUTION
+    # ── 3-token rules ────────────────────────────────────────────────
     {"query_tokens": ["kit", "chaine", "distribution"],
      "required_category_tokens": ["moteur", "distribution", "composants"]},
+    {"query_tokens": ["kit", "roulement", "roue"],
+     "required_category_tokens": ["suspension", "essieu", "avant", "roulement", "roue"]},
+    {"query_tokens": ["kit", "roulements", "roue"],   # plural variant
+     "required_category_tokens": ["suspension", "essieu", "avant", "roulement", "roue"]},
+    {"query_tokens": ["cylindre", "recepteur", "embrayage"],
+     "required_category_tokens": ["embrayage", "boite", "vitesse", "cylindre", "recepteur"]},
+    {"query_tokens": ["cylindre", "emetteur", "embrayage"],
+     "required_category_tokens": ["embrayage", "boite", "vitesse", "cylindre", "emetteur"]},
+    # ── 2-token rules ────────────────────────────────────────────────
     {"query_tokens": ["kit", "chaine"],
      "required_category_tokens": ["moteur", "distribution", "composants"]},
     {"query_tokens": ["chaine", "distribution"],
      "required_category_tokens": ["moteur", "distribution", "composants"]},
-    # ── Add more sub-category filters here. Examples:
-    # {"query_tokens": ["filtre", "huile"],
-    #  "required_category_tokens": ["moteur", "filtration", "huile"]},
-    # {"query_tokens": ["plaquette", "frein"],
-    #  "required_category_tokens": ["freinage", "plaquettes"]},
+    {"query_tokens": ["pompe", "eau"],
+     "required_category_tokens": ["refroidissement", "moteur", "pompe", "eau"]},
+    {"query_tokens": ["radiateur", "eau"],
+     "required_category_tokens": ["refroidissement", "moteur", "radiateur", "eau"]},
+    {"query_tokens": ["radiateur", "chauffage"],
+     "required_category_tokens": ["electrique", "chauffage", "radiateur"]},
+    {"query_tokens": ["joint", "culasse"],
+     "required_category_tokens": ["moteur", "culasse", "joint"]},
+    {"query_tokens": ["filtre", "huile"],
+     "required_category_tokens": ["filtration", "filtre", "huile"]},
+    {"query_tokens": ["filtre", "habitacle"],
+     "required_category_tokens": ["filtration", "filtre", "habitacle"]},
+    {"query_tokens": ["filtre", "carburant"],
+     "required_category_tokens": [
+         ["filtration", "filtre", "essence"],
+         ["filtration", "filtre", "gasoil"],
+     ]},
+    {"query_tokens": ["butee", "debrayage"],
+     "required_category_tokens": ["embrayage", "butee"]},
+    {"query_tokens": ["volant", "moteur"],
+     "required_category_tokens": ["embrayage", "volant", "moteur"]},
+    {"query_tokens": ["cable", "vitesse"],
+     "required_category_tokens": ["commande", "vitesse", "cable"]},
+    {"query_tokens": ["rotule", "suspension"],
+     "required_category_tokens": ["suspension", "essieu", "avant", "triangle"]},
+    {"query_tokens": ["moyeu", "roue"],
+     "required_category_tokens": ["suspension", "essieu", "avant", "moyeu", "roue"]},
+    {"query_tokens": ["toc", "amortisseur"],
+     "required_category_tokens": ["suspension", "amortisseur", "toc"]},
+    # ── 1-token rules (placed LAST so longer rules win first) ────────
+    {"query_tokens": ["turbo"],
+     "required_category_tokens": ["moteur", "echappement", "suralimentation", "turbo"]},
+    {"query_tokens": ["ventilateur"],
+     "required_category_tokens": ["refroidissement", "moteur", "ventilateur"]},
+    {"query_tokens": ["injecteur"],
+     "required_category_tokens": ["moteur", "alimentation", "carburant", "injecteur"]},
+    {"query_tokens": ["amortisseur"],
+     "required_category_tokens": ["suspension", "amortisseur"]},
+    {"query_tokens": ["silenbloc"],
+     "required_category_tokens": [
+         ["suspension", "essieu", "arriere", "train", "silenbloc"],
+         ["suspension", "essieu", "avant", "triangle", "silenbloc"],
+     ]},
+    {"query_tokens": ["silentbloc"],  # alternative spelling
+     "required_category_tokens": [
+         ["suspension", "essieu", "arriere", "train", "silenbloc"],
+         ["suspension", "essieu", "avant", "triangle", "silenbloc"],
+     ]},
+
+      {"query_tokens": ["silentbloc"],  # alternative spelling
+     "required_category_tokens": [
+         ["suspension", "essieu", "arriere", "train", "silenbloc"],
+         ["suspension", "essieu", "avant", "triangle", "silenbloc"],
+     ]},
+    # ── To add a NEW sub-category: copy any block above and edit. ────
 ]
 
 
-def _category_filter_for_query(q: str) -> Optional[List[str]]:
-    """Return the required-category-token list for query `q`, or None
-    when no entry in `SUBCATEGORY_CATEGORY_FILTERS` matches the query."""
+def _category_filter_for_query(q: str) -> Optional[list]:
+    """Return the requirement (flat list OR list-of-lists) for query `q`,
+    or None when no entry in `SUBCATEGORY_CATEGORY_FILTERS` matches."""
     q_set = set(_designation_query_tokens(q))
     if not q_set:
         return None
@@ -1487,15 +1569,16 @@ async def oem_stock_search(
             results.append(r)
 
     # Sub-category categorie filter — items whose `categorie` field (from
-    # the supplier, joined as "niv1 / niv2 / niv3 / niv4") does NOT contain
-    # ALL required category-path tokens are dropped. Configured via
+    # the supplier, joined as "niv1 / niv2 / niv3 / niv4") does NOT satisfy
+    # the configured requirement are dropped. Configured via
     # SUBCATEGORY_CATEGORY_FILTERS at module top, so adding a new
-    # sub-category rule is a one-line edit.
+    # sub-category rule is a one-line edit. Requirement may be a flat
+    # list (AND) or a list of lists (OR over AND-groups).
     cat_required = _category_filter_for_query(query)
     if cat_required:
         results = [
             r for r in results
-            if _designation_has_all_tokens(r.get("categorie") or "", cat_required)
+            if _category_matches(r.get("categorie") or "", cat_required)
         ]
 
     # Sort: in-stock items first, then by price ascending. Out-of-stock items
