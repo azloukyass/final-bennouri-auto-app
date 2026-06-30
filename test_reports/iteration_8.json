@@ -1,0 +1,25 @@
+{
+  "summary": "Backend testing for iteration_8 — category-path filter for /api/oem-stock-search. All 9 pytest cases pass (after relaxing one over-strict regression regex). Acceptance criteria fully met: every item returned for q='Kit,chaine,distribution' has `categorie` containing 'moteur' AND 'distribution' AND 'composants' (accent/case insensitive); count >= 1 (got 2); unregistered q='filtre,huile' bypasses the filter (no_filter behaviour, count=14); module-level SUBCATEGORY_CATEGORY_FILTERS contains the 3 required entries plus extension examples; _category_filter_for_query() returns the right tokens for all required queries and None for unregistered ones; iter_6 architectural caps (PA_COMPAT_CAP=50, asyncio.wait_for(pa_fetch,2.0), as_completed deadline=40.0, LOCKED_SUPPLIER_CAP=60, Semaphore(60), oem_search_variants) are all intact.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_oem_category_filter_iteration8.py",
+    "/app/test_reports/pytest/iteration_8.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Filter map placement (server.py L420-443) and resolver (L446-455) are clean and well-documented; one-line extension pattern (filtre/huile, plaquette/frein) is shown commented at L438-442. Good DRY design.",
+    "Filter application at L1494-1499 uses the existing _designation_has_all_tokens() helper which already accent/case-normalises — no duplicate normalisation logic introduced.",
+    "Note: server.py is 1792 lines — exceeds the 700-line guideline. Consider splitting auth, catalog, supplier-aggregation and search into separate modules. Not blocking iteration_8."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_oem_category_filter_iteration8.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "not tested (skip frontend per request)"},
+  "test_credentials": "admin@bennouri.com / Admin@123 — login OK, returns `token` field.",
+  "seed_data_creation": "None — used existing warm supplier_lookup_cache for model_id=39023, VIN=VR7EF9HNAKJ575626 (CITROËN BERLINGO K9).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration_8 added a category-path filter at /app/backend/server.py L420-455 (SUBCATEGORY_CATEGORY_FILTERS + _category_filter_for_query) and applies it at L1489-1499 in the /api/oem-stock-search response builder. Sample passing items for q='Kit,chaine,distribution': (1) categorie='MOTEUR / DISTRIBUTION / COMPOSANTS / POULIE/TENDEUR / TENDEUR COURROIE DISTRIBUTION', designation='TENDEUR COURROIE DIST-1606948980-...'; (2) categorie='MOTEUR / DISTRIBUTION / COMPOSANTS / COURROIE / COURROIE DISTRIBUTION', designation='COURROIE DIST 118DTS -1608887580- ...'. The iter_7 designation-based filter has been correctly REPLACED (no longer present in code path) — items that would have been dropped because suppliers abbreviate 'distribution' as 'dist' now pass because the filter operates on the unabbreviated `categorie` hierarchy from fadpro_client.py L86.",
+  "rca of the issue": "N/A — iteration_8 is a feature replacement, not a bug fix. The one initial test failure was a regression-check regex mismatch (my test looked for literal `asyncio.as_completed(pending_tasks, timeout=40.0)` but the code uses `deadline = 40.0` followed by `asyncio.as_completed(pending_tasks, timeout=deadline)` — semantically identical, syntactically different). Fixed in the test; functionality is correct."
+}

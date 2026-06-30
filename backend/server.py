@@ -417,6 +417,44 @@ def _designation_has_all_tokens(desig: str, toks: List[str]) -> bool:
     return all(t in norm for t in toks)
 
 
+# ── Sub-category → required category-path tokens ─────────────────────
+# When the search query (after tokenisation & dedup) is a SUPERSET of
+# `query_tokens`, every returned item's `categorie` field (built from the
+# supplier as "niv1 / niv2 / niv3 / niv4") MUST contain ALL of
+# `required_category_tokens` (case-insensitive, accent-insensitive). Items
+# whose `categorie` is empty or missing any required token are dropped.
+#
+# This is the centralised place to add new sub-categories: simply append
+# a new entry below. The list is scanned top-down and the FIRST matching
+# entry wins, so put more-specific rules above generic ones.
+SUBCATEGORY_CATEGORY_FILTERS: List[dict] = [
+    # MOTEUR / DISTRIBUTION
+    {"query_tokens": ["kit", "chaine", "distribution"],
+     "required_category_tokens": ["moteur", "distribution", "composants"]},
+    {"query_tokens": ["kit", "chaine"],
+     "required_category_tokens": ["moteur", "distribution", "composants"]},
+    {"query_tokens": ["chaine", "distribution"],
+     "required_category_tokens": ["moteur", "distribution", "composants"]},
+    # ── Add more sub-category filters here. Examples:
+    # {"query_tokens": ["filtre", "huile"],
+    #  "required_category_tokens": ["moteur", "filtration", "huile"]},
+    # {"query_tokens": ["plaquette", "frein"],
+    #  "required_category_tokens": ["freinage", "plaquettes"]},
+]
+
+
+def _category_filter_for_query(q: str) -> Optional[List[str]]:
+    """Return the required-category-token list for query `q`, or None
+    when no entry in `SUBCATEGORY_CATEGORY_FILTERS` matches the query."""
+    q_set = set(_designation_query_tokens(q))
+    if not q_set:
+        return None
+    for entry in SUBCATEGORY_CATEGORY_FILTERS:
+        if set(entry["query_tokens"]).issubset(q_set):
+            return entry["required_category_tokens"]
+    return None
+
+
 
 def oem_search_variants(ref: str) -> List[str]:
     """Generate ordered partner-search variants for a TecDoc OEM reference.
@@ -1448,16 +1486,17 @@ async def oem_stock_search(
             seen_refs.add(key)
             results.append(r)
 
-    # Sub-category designation filter — items whose `designation` does NOT
-    # contain ALL the query tokens are dropped. Example: q="Kit,chaine,
-    # distribution" requires "kit" AND "chaine" AND "distribution" inside
-    # the supplier designation (case-insensitive, accent-insensitive). This
-    # is what the user reported: when searching "kit chaine" the response
-    # must only show items whose designation references that sub-category,
-    # not every OEM that came back from the union of split keywords.
-    q_toks = _designation_query_tokens(query)
-    if q_toks:
-        results = [r for r in results if _designation_has_all_tokens(r.get("designation") or "", q_toks)]
+    # Sub-category categorie filter — items whose `categorie` field (from
+    # the supplier, joined as "niv1 / niv2 / niv3 / niv4") does NOT contain
+    # ALL required category-path tokens are dropped. Configured via
+    # SUBCATEGORY_CATEGORY_FILTERS at module top, so adding a new
+    # sub-category rule is a one-line edit.
+    cat_required = _category_filter_for_query(query)
+    if cat_required:
+        results = [
+            r for r in results
+            if _designation_has_all_tokens(r.get("categorie") or "", cat_required)
+        ]
 
     # Sort: in-stock items first, then by price ascending. Out-of-stock items
     # are still shown so the user can see what's available in the supplier
