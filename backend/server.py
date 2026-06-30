@@ -1141,10 +1141,18 @@ async def oem_stock_search(
         seen.add(ref)
         candidates.append({"ref": ref, "oem_name": it.get("name") or ""})
 
-    # 2. Multi-supplier (FadPro + Copia + PartsPro) lookups with concurrency cap.
-    # Higher semaphore (25) so 25 OEM refs are checked simultaneously — keeps
-    # the total endpoint time roughly constant regardless of candidate count.
-    sem = asyncio.Semaphore(25)
+    # 2. Multi-supplier (FadPro + Copia + PartsPro) lookups.
+    # FadPro has no per-instance lock so it runs fully in parallel — we use a
+    # high semaphore (60) so even 600+ candidates complete in ~10-15 s.
+    # Copia & PartsPro hold a per-supplier asyncio.Lock that serialises every
+    # call: 600 × 5 s = 3000 s on each, so we cap them at the first
+    # LOCKED_SUPPLIER_CAP candidates (TecDoc returns refs in relevance order
+    # so the head of the list is the most likely to match). Without this cap
+    # the global timeout fires and the FadPro variant fallback never gets a
+    # chance to surface — which is exactly the user-reported bug for
+    # q='Kit,chaine,distribution' (616 candidates).
+    sem = asyncio.Semaphore(60)
+    LOCKED_SUPPLIER_CAP = 60
 
     # ── Supplier-pick cache (10 min TTL) ─────────────────────────────────
     # Caches the "chosen" item per (source, ref) so repeating the same OEM
@@ -1258,18 +1266,24 @@ async def oem_stock_search(
         )
         return compat
 
-    async def lookup(c):
+    async def lookup(c, idx: int):
         async with sem:
-            # Per-supplier cached fetch — each has its own 5s timeout inside
-            # cached_supplier_search, so one slow supplier no longer kills the
-            # other two. Failed fetches return [] (not cached) so the next
-            # request retries naturally.
+            # FadPro runs for EVERY candidate (no lock → fully parallel).
+            # Copia & PartsPro are skipped past LOCKED_SUPPLIER_CAP — their
+            # per-instance asyncio.Lock would otherwise serialise all 600+
+            # candidates and trip the global timeout, preventing the FadPro
+            # variant fallback from ever surfacing matches.
             tasks = [
                 cached_supplier_search("fadpro",   c["ref"], fadpro_search),
-                cached_supplier_search("copia",    c["ref"], lambda r: get_copia().search_reference(r)),
-                cached_supplier_search("partspro", c["ref"], lambda r: get_partspro().search_reference(r)),
             ]
-            fp, co, pp = await asyncio.gather(*tasks, return_exceptions=True)
+            check_locked = idx < LOCKED_SUPPLIER_CAP
+            if check_locked:
+                tasks.append(cached_supplier_search("copia",    c["ref"], lambda r: get_copia().search_reference(r)))
+                tasks.append(cached_supplier_search("partspro", c["ref"], lambda r: get_partspro().search_reference(r)))
+            gathered = await asyncio.gather(*tasks, return_exceptions=True)
+            fp = gathered[0]
+            co = gathered[1] if check_locked else []
+            pp = gathered[2] if check_locked else []
             # Normalise exceptions to empty lists
             fp = fp if isinstance(fp, list) else []
             co = co if isinstance(co, list) else []
@@ -1322,13 +1336,14 @@ async def oem_stock_search(
 
     # Process ALL candidates in parallel (concurrency is bounded by the
     # semaphore inside `lookup`). FadPro is variant-aware (≤3 calls per
-    # ref × 3 s) and Copia/PartsPro are single-shot (≤5 s) so each ref
-    # finishes in ≤ 14 s worst-case. A global 45 s timeout protects against
-    # Cloudflare's 100 s gateway limit with a healthy margin.
+    # ref × 3 s) and runs for ALL candidates; Copia/PartsPro are single-shot
+    # and only run for the first LOCKED_SUPPLIER_CAP candidates (to avoid
+    # the per-instance lock serialising hundreds of refs). A global 45 s
+    # timeout protects against Cloudflare's 100 s gateway limit.
     checked = len(candidates)
     try:
         all_results = await asyncio.wait_for(
-            asyncio.gather(*[lookup(c) for c in candidates]),
+            asyncio.gather(*[lookup(c, i) for i, c in enumerate(candidates)]),
             timeout=45.0,
         )
     except asyncio.TimeoutError:

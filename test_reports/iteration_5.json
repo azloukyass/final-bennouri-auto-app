@@ -1,0 +1,100 @@
+{
+  "summary": "Backend-only iteration_5 verification of the LOCKED_SUPPLIER_CAP=60 + Semaphore=60 architecture for the user-reported bug (q='Kit,chaine,distribution', 616 candidates → count=0). The cap architecture is CORRECTLY IMPLEMENTED and the FadPro variant fallback DID resolve OEM 1608745980 to 8 items in supplier_lookup_cache (matched_variant='1608745980'). HOWEVER the user-reported bug is NOT FIXED end-to-end: GET /api/oem-stock-search still returns count=0 / items=[] because the 45 s global asyncio.wait_for() trips before lookup() finishes — observed at 45.16 s (cold) AND 45.15 s (warm rerun). Backend log confirms 'oem-stock-search global timeout for q=Kit,chaine,distribution'. ROOT CAUSE: piecesautos.tn vehicle-compat scraping (get_compat_list, server.py L1247) is the bottleneck, NOT supplier lookups — dozens of 'piecesautos search failed: ReadTimeout' warnings during the run with pa_sem=10 means 100+ compat fetches × 5-10 s each easily exceed 45 s, cancelling gather() and dropping ALL items.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/oem-stock-search?q=Kit,chaine,distribution",
+        "issue": "Global timeout still fires at 45 s on BOTH cold and warm cache (45.16s cold / 45.15s warm) → count=0 items=[] despite FadPro cache having 530 rows incl. ref=1608745980 with 8 items. Root cause: piecesautos.tn compatibility scraping via get_compat_list() — log shows many 'piecesautos search failed: ReadTimeout' during the run with pa_sem=10 parallelism. User-reported bug NOT resolved end-to-end.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "/api/oem-stock-search (lookup loop)",
+        "issue": "Copia/PartsPro cache rows = 61 each instead of strict <= 60 — a race in semaphore queueing allowed one extra call past LOCKED_SUPPLIER_CAP. Minor — doesn't affect correctness."
+      },
+      {
+        "endpoint": "piecesautos.tn fetcher (pa_fetch)",
+        "issue": "No per-call timeout — relies on httpx default. ReadTimeouts cost several seconds each and compound under pa_sem=10."
+      }
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_oem_walltime_iteration5.py",
+    "/app/test_reports/pytest/iteration_5_results.xml"
+  ],
+  "tests_executed": {
+    "total": 10,
+    "passed": 7,
+    "failed": 3,
+    "elapsed_s": 52.09,
+    "breakdown": {
+      "TestCapArchitecture": "5/5 PASSED (Semaphore(60), LOCKED_SUPPLIER_CAP=60, idx<LOCKED_SUPPLIER_CAP gate, enumerate(idx), VARIANT_SOURCES={'fadpro'} all present in server.py)",
+      "TestLargeQueryWalltime.test_flush_and_call_returns_200_under_45s": "FAILED — HTTP 200 but elapsed=45.16s (== global timeout)",
+      "TestLargeQueryWalltime.test_count_is_at_least_one": "FAILED — count=0 items_len=0 checked=616 — user-reported bug persists",
+      "TestUserReportedOemFallback": "1/1 PASSED — cache row source='fadpro' ref='1608745980' matched_variant='1608745980' items_count=8 (variant fallback mechanism WORKS at the cache layer)",
+      "TestCacheDistribution": "FAILED — fadpro=529 of 616 candidates (timeout cancelled the last ~87 fadpro calls), copia=60, partspro=60 (correctly capped)",
+      "TestSmallQueryRegression": "1/1 PASSED — q='chaine,distribution' returns count>=1 in <30s (warm cache assisted)"
+    }
+  },
+  "live_evidence": {
+    "large_query_cold_run": {
+      "elapsed_s": 45.16,
+      "http_status": 200,
+      "checked": 616,
+      "count_returned": 0,
+      "items_len": 0,
+      "global_timeout_in_log": true,
+      "log_msg": "oem-stock-search global timeout for q='Kit,chaine,distribution'"
+    },
+    "large_query_warm_rerun": {
+      "elapsed_s": 45.15,
+      "http_status": 200,
+      "checked": 616,
+      "count_returned": 0,
+      "items_len": 0,
+      "comment": "Even with 530 fadpro + 60 copia + 60 partspro rows already warm in supplier_lookup_cache, the warm rerun STILL times out at 45.15s. This proves supplier lookups are NOT the bottleneck — get_compat_list() is."
+    },
+    "supplier_cache_after_run": {
+      "fadpro_rows": 530,
+      "fadpro_nonempty_hits": 42,
+      "copia_rows": 60,
+      "partspro_rows": 60,
+      "supplier_cache_total": 654,
+      "piecesautos_compat_cache_total": 461
+    },
+    "user_reported_oem_1608745980": {
+      "supplier_cache_row_present": true,
+      "matched_variant": "1608745980",
+      "items_count": 8,
+      "fallback_mechanism_status": "WORKS at the cache layer — the variant fallback ran (fadpro_search returned 8 items for the canonical 10-digit form, so the 6-digit '160874' was never needed). The mechanism is sound; the problem is that the global timeout cancels the gather before items propagate to the HTTP response."
+    },
+    "backend_log_evidence": {
+      "global_timeout_msg": "WARNING root: oem-stock-search global timeout for q='Kit,chaine,distribution' (observed 2x: once for cold run, once for warm rerun)",
+      "piecesautos_readtimeouts_during_run": "Many (5750FT, 5750VL, 5750WJ, 5750XF, 5750YP, 532P2, 2052X5, 532P7, 532W9, 0113T2, 9846799580, 1647873580, 1610564580, ...)"
+    }
+  },
+  "action_items": [
+    "CRITICAL: The cap architecture (Semaphore=60, LOCKED_SUPPLIER_CAP=60) is correctly implemented but does NOT fix the user-reported bug because the bottleneck is get_compat_list() (piecesautos.tn scraping), not the supplier lookups. Options for main agent E1: (a) GATE the vehicle-compatibility filter behind a separate cap (PA_COMPAT_CAP) the same way Copia/PartsPro are capped — only call piecesautos.tn for the first N picked items; (b) add explicit per-call timeout to pa_fetch (e.g. asyncio.wait_for(pa_fetch(ref), timeout=2.0)) so ReadTimeouts don't accumulate; (c) bump the global timeout from 45 s → 90 s (still under Cloudflare 100 s) which alone would let the warm path finish in ~50-60 s; (d) BEST: when the global asyncio.wait_for fires, surface PARTIAL results from any already-completed lookup() coroutines instead of returning empty all_results=[]. Recommended combination: (a) + (b) + (d).",
+    "Tighten Copia/PartsPro queue admission so the count never exceeds 60 — currently 61 each.",
+    "Add a per-call timeout to pa_fetch in /app/backend/server.py to prevent piecesautos.tn ReadTimeouts (5–10 s each) from compounding under pa_sem=10."
+  ],
+  "critical_code_review_comments": [
+    "server.py L1154 sem=asyncio.Semaphore(60) and L1155 LOCKED_SUPPLIER_CAP=60 are correctly declared at module-level inside the endpoint.",
+    "server.py L1269 lookup(c, idx): the idx<LOCKED_SUPPLIER_CAP gate is wired correctly and the enumerate at L1346 passes the index.",
+    "server.py L1247 get_compat_list(ref) is the unaddressed bottleneck — it's cached for 7 days but the cache is ref-keyed and cold for a fresh query like 'Kit,chaine,distribution' that touches new refs. With pa_sem=10 + per-fetch ReadTimeouts of 5–10 s, even 100+ refs needing compat checks alone exhaust the 45 s budget.",
+    "When asyncio.wait_for fires on the gather, all in-flight lookup() coroutines are cancelled and their picked items are lost. A try/except with asyncio.shield or a 'as_completed' pattern would preserve completed work.",
+    "server.py is now 1654 lines — the OEM-search endpoint alone is ~250 lines. Worth refactoring into a separate oem_search_service.py with: SupplierCapManager, PiecesautosCompatService, VariantFallbackResolver as separate classes. Not blocking this iteration."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_oem_walltime_iteration5.py (new file, 10 tests — 7 passed / 3 failed)"
+  ],
+  "success_rate": {"backend": "70% (7/10) — architectural assertions all pass; end-to-end user case still failing at the global timeout layer", "frontend": "n/a (out of scope)"},
+  "test_credentials": "admin@bennouri.com / Admin@123 (validated)",
+  "seed_data_creation": "supplier_lookup_cache flushed (787 rows deleted) then repopulated to 654 rows (530 fadpro + 60 copia + 60 partspro + leftovers). piecesautos_compat_cache grew to 461 rows during the run.",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "The cap architecture is correctly landed in server.py and the FadPro variant fallback writes the right cache row for the user-reported OEM 1608745980 (matched_variant='1608745980', items_count=8). BUT the bug is NOT FIXED end-to-end — wall-time on the user's reported query (q='Kit,chaine,distribution', 616 candidates) is 45.16 s cold AND 45.15 s warm, which exactly trips the 45 s global asyncio.wait_for and returns count=0 / items=[]. Backend log confirms 'oem-stock-search global timeout' twice. ROOT CAUSE is piecesautos.tn vehicle-compatibility scraping in get_compat_list (server.py L1247) — many ReadTimeouts of 5–10 s each at pa_sem=10 concurrency. Main agent E1 must EITHER: (a) cap piecesautos calls the same way Copia/PartsPro are capped, (b) add per-call timeout to pa_fetch, (c) bump global timeout 45→90 s, or (d) surface partial results on timeout. Re-test by repeating the LARGE query and confirming count>=1.",
+  "rca_of_the_issue": "USER-REPORTED BUG (q='Kit,chaine,distribution' → count=0): the iteration_5 architecture (Semaphore=60, LOCKED_SUPPLIER_CAP=60, FadPro unconditional, variant fallback to 6-digit prefix) is correctly implemented. The FadPro variant fallback DID surface 8 items for the user's reported OEM 1608745980 (visible in db.supplier_lookup_cache). HOWEVER the items never reach the HTTP response because the 45 s asyncio.wait_for global timeout (server.py L1347) fires before asyncio.gather completes — cancelling ALL lookup() coroutines and returning empty all_results=[]. The endpoint then returns count=0. The bottleneck is NOT supplier lookups (proven by warm-cache rerun at 45.15s identical to cold) but get_compat_list() at L1247, which scrapes piecesautos.tn live with pa_sem=10. Backend log shows dozens of 'piecesautos search failed: ReadTimeout' during the run. Each ReadTimeout costs 5–10 s; with 100+ picked items needing compat checks, total compat-time easily exceeds 45 s. FIX requires capping compat fetches (analogous to LOCKED_SUPPLIER_CAP) OR adding per-call timeouts to pa_fetch OR bumping the global timeout to 90 s OR surfacing partial results on timeout. Recommended: pa_fetch_cap=60 + per-call 2 s timeout + surface partial results."
+}
