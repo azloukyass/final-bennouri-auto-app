@@ -1,0 +1,40 @@
+{
+  "summary": "Backend-only retest of the intelligent VIN→vehicle_id picker fix (rapidapi_client.vin_mega_decode now unwraps payload['data']). 5/5 pytest cases passed: (1) vin_mega_decode(VR7EF9HNAKJ575626) returns dict with sra_commercial='1.6 HDI 75 (MF9HW, GJ9HWC, GF9HWC, GN9HWC)'; (2) pick_best_vehicle_id over real TecDoc list for model_id=39023 with that sra returns 133257; (3) sanity unit test confirming BlueHDi→HDi token normalisation picks the 75 hp variant over 100 hp; (4) GET /api/oem-stock-search with VIN+model_id=39023+q='filtre à huile' returns 200 after wiping tecdoc_vehicle_cache; (5) backend log contains 'VIN VR7EF9HNAKJ575626: matched vehicle_id=133257 via sra=...' as expected.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/oem-stock-search", "issue": "When the picker fails to match, code silently falls back to vehicles[0].get('vehicleId') with only an info log. Consider returning the fallback flag (e.g. 'matched_by_vin': false) in the response so the frontend can warn the user."},
+      {"endpoint": "rapidapi_client.vin_mega_decode", "issue": "Function returns the inner 'data' dict when present, but if a future RapidAPI response wraps data differently (e.g. data.vehicle.sra_commercial) the unwrap is one level only. Worth adding a debug log of payload top-level keys when sra_commercial is missing, to aid future debugging."},
+      {"endpoint": "rapidapi_client.pick_best_vehicle_id", "issue": "Scoring only accepts the strongest match (every sra token present). If sra contains an extra token absent from all typeEngineName variants (e.g. region marker), no vehicle is ever picked. A partial-best fallback (≥ N-1 tokens) would be more forgiving."},
+      {"endpoint": "tecdoc_vehicle_cache", "issue": "Cache key includes vin, model_id, lang_id but no TTL/expiry. If TecDoc updates variants, stale cache rows can return obsolete vehicle_ids forever. Add a 7-day TTL index or invalidation strategy."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_vin_vehicle_picker.py",
+    "/app/test_reports/pytest/vin_picker_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL — Expose 'matched_by_vin' / 'vehicle_id_source' in /api/oem-stock-search response so the UI can show whether the engine variant was chosen via VIN or fell back to the first one.",
+    "OPTIONAL — Add TTL on tecdoc_vehicle_cache so stale entries expire.",
+    "OPTIONAL — Add a debug log of payload keys in vin_mega_decode when 'sra_commercial' is absent."
+  ],
+  "critical_code_review_comments": [
+    "Fix is correct and minimal: payload.get('data') unwrap in vin_mega_decode is the right surgical change.",
+    "_engine_tokens does only one normalisation (Blue/e prefix strip). Robust enough for the current VW/PSA test cases but won't catch e.g. 'CDTi' (Opel) ↔ 'Common Rail Diesel'. Keep an eye on it.",
+    "server.py is now 1564 lines — past the 700-line guideline. Strong candidate for splitting into auth/catalog/orders/admin/oem routers when feasible.",
+    "pick_best_vehicle_id returns None on no full match — caller correctly handles fallback to vehicles[0]; behaviour matches review_request expectation.",
+    "Cache write happens AFTER successful resolution only — good; failed matches won't poison the cache. But note resolved vehicle_id is cached regardless of whether it came from VIN match or fallback; consider keying with 'source' for clarity."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_vin_vehicle_picker.py (new)",
+    "/app/test_reports/pytest/vin_picker_results.xml (new)"
+  ],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "not tested (backend-only request)"},
+  "test_credentials": "Admin: admin@bennouri.com / Admin@123. New test users created on-the-fly with TEST_vin_* prefix.",
+  "seed_data_creation": "Each run registers 1 fresh user TEST_vin_<uuid>@example.com (used only for JWT). One row may be inserted into tecdoc_vehicle_cache for {vin:VR7EF9HNAKJ575626, model_id:39023, lang_id:6}.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The VIN→vehicle_id fix is verified end-to-end against the real RapidAPI vin-decoder-mega + auto-parts-catalog (TecDoc) endpoints. To re-verify on a cold cache, delete the cached row first: db.tecdoc_vehicle_cache.delete_many({'vin':'VR7EF9HNAKJ575626'}). Backend log line 'VIN <vin>: matched vehicle_id=<id> via sra=<sra>' is the canonical signal that the intelligent picker fired. The same test file also asserts the fallback (cache wipe → fresh resolution).",
+  "rca of the issue": "Original bug: rapidapi_client.vin_mega_decode returned the outer envelope dict (e.g. {'data': {...}, 'status': 'ok'}), so .get('sra_commercial') was always None and the picker received an empty string → it returned None → server fell back to vehicles[0] (wrong variant). Fix in vin_mega_decode (lines 128-132): after parsing JSON, if payload['data'] is a dict, return that inner dict; else return payload as-is. Verified: live RapidAPI call now yields sra_commercial='1.6 HDI 75 (MF9HW, GJ9HWC, GF9HWC, GN9HWC)' and the picker selects vehicleId=133257 against TecDoc model 39023 — matching the user-reported expected value. The supervisor log confirms: 'VIN VR7EF9HNAKJ575626: matched vehicle_id=133257 via sra=...'."
+}

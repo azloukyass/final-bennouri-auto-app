@@ -122,8 +122,14 @@ async def vin_mega_decode(vin: str) -> Optional[Dict]:
             if r.status_code != 200:
                 logger.warning(f"vin-mega → {r.status_code}: {r.text[:200]}")
                 return None
-            data = r.json()
-            return data if isinstance(data, dict) else None
+            payload = r.json()
+            if not isinstance(payload, dict):
+                return None
+            # vin-decoder-mega nests the real fields under "data"
+            inner = payload.get("data")
+            if isinstance(inner, dict):
+                return inner
+            return payload
     except Exception as e:
         logger.warning(f"vin-mega error: {e}")
         return None
