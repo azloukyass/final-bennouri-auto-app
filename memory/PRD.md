@@ -69,6 +69,15 @@ Build a French-language auto parts e-commerce platform "BENNOURI Pièces Auto" f
 - New regression test: `/app/backend/tests/test_vin_vehicle_picker.py`.
 ## Prioritized Backlog
 ### P1
+
+### OEM Partner-Search Variant Fallback (2026-06-30)
+- New module-level helper `server.oem_search_variants(ref)` enumerates ordered partner-search fallbacks: original → suffix-stripped (KIT/_S/_F/_XS) → first-8 digits → first-6 digits → leading-zero stripped → leading-zero added.
+- `cached_supplier_search` now iterates variants per OEM ref against FadPro/Copia/PartsPro, breaks on the first non-empty supplier response, and stores the picked code as `matched_variant` in `supplier_lookup_cache`. Per-variant timeout: 5 s.
+- Verified live (iteration_3): 14 production cache rows where `matched_variant ≠ ref`, e.g. `1610577780KIT → 1610577780 (4 items)`, `1623095180 → 162309 (13 items)`, `1628925880 → 162892 (2 items)`. Direct FadPro probe confirms `1610577780KIT` alone returns 404 while `1610577780` returns 4 items.
+- New regression test: `/app/backend/tests/test_oem_search_variants.py` (8 variant cases + Mongo cache assertion).
+
+### Known external constraint
+- RapidAPI `vin-decoder-mega.p.rapidapi.com` BASIC plan monthly quota currently exhausted (HTTP 429). The intelligent vehicle_id picker handles this gracefully (falls back to `vehicles[0]`); upgrade or wait for the monthly reset.
 - Real payment integration (Stripe — Visa/Mastercard) — keys ready in environment
 - Connect OEM part numbers to internal inventory / cart flow (so user can add scraped OEM ref directly to Bennouri cart)
 - Email notifications on order confirmation (Resend / SendGrid)
