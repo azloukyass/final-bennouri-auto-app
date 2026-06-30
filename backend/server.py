@@ -374,6 +374,50 @@ import asyncio
 import re as _re
 
 
+def _strip_accents(s: str) -> str:
+    """Lowercase + strip diacritics for accent-insensitive comparison."""
+    if not s:
+        return ""
+    import unicodedata
+    n = unicodedata.normalize("NFKD", s)
+    return "".join(c for c in n if not unicodedata.combining(c)).lower()
+
+
+# Word characters used to break the supplier designation into tokens. ≥3
+# alphanumerics so short stopwords ("de", "à") are dropped without a list.
+_DESIG_TOKEN_RE = _re.compile(r"[a-z0-9]{3,}")
+
+
+def _designation_query_tokens(q: str) -> List[str]:
+    """Tokenise the search query for the sub-category designation filter.
+
+    Returns ≥3-char alphanumeric tokens, accent-stripped and lowercased.
+    Splits on whitespace, commas and dashes so 'Kit,chaine,distribution',
+    'kit chaine distribution' and 'kit-chaine' all yield equivalent token
+    lists.
+    """
+    if not q:
+        return []
+    norm = _strip_accents(q.replace(",", " ").replace("-", " "))
+    toks = _DESIG_TOKEN_RE.findall(norm)
+    seen, out = set(), []
+    for t in toks:
+        if t not in seen:
+            seen.add(t)
+            out.append(t)
+    return out
+
+
+def _designation_has_all_tokens(desig: str, toks: List[str]) -> bool:
+    """True iff every query token appears as a substring of the
+    accent-stripped lowercased designation."""
+    if not toks:
+        return True
+    norm = _strip_accents(desig)
+    return all(t in norm for t in toks)
+
+
+
 def oem_search_variants(ref: str) -> List[str]:
     """Generate ordered partner-search variants for a TecDoc OEM reference.
 
@@ -1403,6 +1447,17 @@ async def oem_stock_search(
                 continue
             seen_refs.add(key)
             results.append(r)
+
+    # Sub-category designation filter — items whose `designation` does NOT
+    # contain ALL the query tokens are dropped. Example: q="Kit,chaine,
+    # distribution" requires "kit" AND "chaine" AND "distribution" inside
+    # the supplier designation (case-insensitive, accent-insensitive). This
+    # is what the user reported: when searching "kit chaine" the response
+    # must only show items whose designation references that sub-category,
+    # not every OEM that came back from the union of split keywords.
+    q_toks = _designation_query_tokens(query)
+    if q_toks:
+        results = [r for r in results if _designation_has_all_tokens(r.get("designation") or "", q_toks)]
 
     # Sort: in-stock items first, then by price ascending. Out-of-stock items
     # are still shown so the user can see what's available in the supplier
