@@ -61,6 +61,12 @@ Build a French-language auto parts e-commerce platform "BENNOURI Pièces Auto" f
 - Auto-resets when a new TecDoc search is fired
 - Verified end-to-end with admin@bennouri.com on VIN `WVWZZZ1KZ8W123456`, query `filtre` (2 items): "boitier"→1, "support"→1, "huile"→0
 
+
+### Intelligent vehicle_id picker via vin-decoder-mega (2026-06-30)
+- Fix in `/app/backend/rapidapi_client.py` `vin_mega_decode`: response from `vin-decoder-mega.p.rapidapi.com/vin.php` is `{data: {sra_commercial, ...}, ...}`. Previously the outer dict was returned, so `.get("sra_commercial")` was always None and the server fell back to `vehicles[0]` (wrong variant).
+- After fix: VIN `VR7EF9HNAKJ575626` → `sra_commercial="1.6 HDI 75 (MF9HW, GJ9HWC, GF9HWC, GN9HWC)"` → token-matches `1.6 BlueHDi 75` (BlueHDi→HDi normalization) → picks `vehicle_id=133257` on TecDoc model 39023.
+- Verified by testing agent (iteration_2): 5/5 pytest assertions pass, `/api/oem-stock-search` returns 200 with backend log `VIN VR7EF9HNAKJ575626: matched vehicle_id=133257 via sra=...`.
+- New regression test: `/app/backend/tests/test_vin_vehicle_picker.py`.
 ## Prioritized Backlog
 ### P1
 - Real payment integration (Stripe — Visa/Mastercard) — keys ready in environment
