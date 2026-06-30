@@ -1,0 +1,71 @@
+{
+  "summary": "Backend-only iteration_3 testing of OEM partner-search variant fallback. Verified server.oem_search_variants() for all 6 ticket cases (exact-list match), confirmed FadPro evidence (1610577780KIT → 404 / 1610577780 → 4 items, the textbook bug), exercised the variant loop end-to-end with Mongo persistence, and proved the fix is LIVE by inspecting db.supplier_lookup_cache (14 production rows where matched_variant != ref, including the exact ticket example). iteration_2 vehicle_id picker regression remained green; vin_mega_decode runtime check was skipped because the RapidAPI monthly quota is exhausted (HTTP 429), not a code regression.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "rapidapi vin-mega-decode", "issue": "MONTHLY quota exhausted (HTTP 429) on the BASIC plan — cannot live-validate vin_mega_decode's data unwrap. The function correctly returns None on 429 (which is what we want); only the live happy-path assertion was skipped."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_oem_search_variants.py",
+    "/app/test_reports/pytest/iteration_3_results.xml"
+  ],
+  "tests_executed": {
+    "total": 15,
+    "passed": 14,
+    "skipped": 1,
+    "failed": 0,
+    "breakdown": {
+      "TestOemSearchVariants": "8/8 PASSED (6 parametrized cases + empty input + no-duplicates)",
+      "TestFadProShortVariantHits": "3/3 PASSED (KIT 404, KIT stripped → 4 items, 6-digit ≥ canonical)",
+      "TestCachedSupplierSearchFallback": "2/2 PASSED (variant loop picks '1610577780', Mongo row records matched_variant='1610577780')",
+      "TestVehicleIdPickerRegression": "1 PASS, 1 SKIP (picker→133257 PASS, vin_mega_decode SKIPPED on 429 quota)"
+    }
+  },
+  "live_evidence": {
+    "supplier_lookup_cache_total_rows": 3297,
+    "rows_with_matched_variant_field": 171,
+    "rows_where_matched_variant_differs_from_ref": 14,
+    "examples": [
+      "fadpro: 1610577780KIT → matched_variant=1610577780 (items=4) — EXACT BUG EXAMPLE",
+      "partspro: 1610577780KIT → matched_variant=1610577780 (items=1)",
+      "fadpro: 9823954880 → matched_variant=982395 (items=2)",
+      "fadpro: 1628925880 → matched_variant=162892 (items=2)",
+      "fadpro: 1623095180 → matched_variant=162309 (items=13)",
+      "partspro: 1613561980 → matched_variant=161356 (items=1)"
+    ]
+  },
+  "fadpro_direct_probe_results": {
+    "1608745980": "8 items (canonical now indexed at supplier)",
+    "16087459": "8 items",
+    "160874": "27 items (broader prefix)",
+    "1610577780KIT": "RuntimeError (404 — 'Aucun article trouvé') — bug pattern confirmed",
+    "1610577780": "4 items (KIT-stripped variant succeeds)",
+    "083075": "16 items",
+    "83075": "17 items",
+    "1608747680_S": "4 items",
+    "1608747680": "4 items",
+    "16087476": "4 items"
+  },
+  "action_items": [
+    "No fix required — feature works as specified. Optional: monitor/upgrade RapidAPI plan; monthly quota for vin-mega-decode is currently exhausted (BASIC plan)."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 1627 lines — out-of-scope to refactor this iteration, but the ticket already flagged it. Splitting catalog/oem/admin routers into separate modules would help maintainability.",
+    "oem_search_variants currently only strips KIT/_S/_F/_XS — if other PSA pack codes appear (e.g. PACK, BTE, REC), they will not be peeled. Easy extension if/when needed.",
+    "cached_supplier_search is defined INSIDE the endpoint coroutine, which makes it hard to unit-test directly (had to copy the loop into the test). Consider hoisting it to module scope so it can be imported.",
+    "The variant loop uses 5 s asyncio.wait_for per variant — for a 4-variant ref (e.g. 1608747680_S) worst-case latency is 20 s if every supplier times out. Currently mitigated by Semaphore(25), but worth keeping an eye on tail latency in production.",
+    "Old supplier_lookup_cache rows (3126 of them) don't carry the matched_variant field yet — harmless (they will refresh under the 10 min TTL), just a heads-up."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_oem_search_variants.py (new file)"
+  ],
+  "success_rate": {"backend": "100% (14/14 executable tests passed; 1 skipped due to external RapidAPI quota)", "frontend": "n/a (out of scope this iteration)"},
+  "test_credentials": "admin@bennouri.com / Admin@123 (from /app/memory/test_credentials.md) — not needed for these tests; we hit fadpro_client + Mongo directly.",
+  "seed_data_creation": "None. Tests use real FadPro live data and the live supplier_lookup_cache collection. One cache row is wiped & rewritten under (source=fadpro, ref=1610577780KIT) per run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "RapidAPI vin-mega-decode quota is exhausted on the BASIC plan — any test that calls vin_mega_decode() live will get None (HTTP 429). The previously-cached partsouq/tecdoc data still works fine; only the live RapidAPI VIN decode path is affected. cached_supplier_search is defined inside /api/oem-stock-search — to unit-test it you have to re-build the variant loop inline (as test_oem_search_variants.py does) until it's hoisted to module scope. Tests written: /app/backend/tests/test_oem_search_variants.py (14 pass + 1 skip in ~15 s).",
+  "rca_of_the_issue": "Bug: TecDoc returns OEM refs in their canonical PSA/Renault form (10-digit, with KIT/_S suffixes, with leading zeros), but FadPro/Copia/PartsPro index the same physical article under one of several non-canonical forms (suffix-stripped, 6 or 8 leading digits, with/without a leading zero). Result: searching the canonical ref returns 0 hits even when the part exists. Mitigation (already shipped): server.oem_search_variants(ref) enumerates the variants in a sensible order (original → suffix-stripped → first-8 → first-6 → no-leading-zero → with-leading-zero), and cached_supplier_search iterates them, breaking on the first non-empty result, and stores the picked variant in db.supplier_lookup_cache.matched_variant so subsequent calls return identical items from cache. Verified live: 14 production rows in supplier_lookup_cache where matched_variant ≠ ref, including the exact ticket example (1610577780KIT → 1610577780)."
+}

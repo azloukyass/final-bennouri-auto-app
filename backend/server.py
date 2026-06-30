@@ -371,6 +371,52 @@ def _translate_fuel(fuel: str) -> str:
 
 
 import asyncio
+import re as _re
+
+
+def oem_search_variants(ref: str) -> List[str]:
+    """Generate ordered partner-search variants for a TecDoc OEM reference.
+
+    Suppliers (FadPro/Copia/PartsPro) often store the same article under a
+    shorter / un-suffixed / non-zero-padded code than what TecDoc returns:
+
+        TecDoc            → Partner DB
+        1608745980        → 160874         (first 6 of a 10-digit PSA code)
+        1610577780KIT     → 1610577780     (strip "KIT" suffix)
+        083075            → 83075          (strip leading zero)
+        83075             → 083075         (add leading zero for short refs)
+
+    The list is ordered: the original ref is always tried first, then
+    suffix-stripped, then numeric prefixes (8 then 6 chars), then
+    zero-padding tweaks. Duplicates removed while preserving order.
+    """
+    ref = (ref or "").strip()
+    if not ref:
+        return []
+    out = [ref]
+    # 1) strip common pack/suffix markers (KIT, _S, _F, _XS, etc.)
+    base = _re.sub(r"(KIT|_S|_F|_XS)$", "", ref, flags=_re.IGNORECASE)
+    if base and base != ref:
+        out.append(base)
+    # 2) numeric-only fallbacks (PSA / Renault style refs)
+    if base.isdigit():
+        if len(base) >= 8:
+            out.append(base[:8])
+        if len(base) >= 6:
+            out.append(base[:6])
+        stripped = base.lstrip("0")
+        if stripped and stripped != base:
+            out.append(stripped)
+        # add a leading zero for 5-digit numerics (e.g. 83075 → 083075)
+        if 5 <= len(base) <= 6 and not base.startswith("0"):
+            out.append("0" + base)
+    # dedupe preserving order
+    seen, dedup = set(), []
+    for v in out:
+        if v and v not in seen:
+            seen.add(v)
+            dedup.append(v)
+    return dedup
 
 
 async def _partsouq_background_scrape(vin: str):
@@ -1107,7 +1153,14 @@ async def oem_stock_search(
     SUPPLIER_CACHE_TTL_S = 600
 
     async def cached_supplier_search(source: str, ref: str, fetcher):
-        """Return the raw supplier list for `ref`, with 10-min MongoDB cache."""
+        """Return the raw supplier list for `ref`, with 10-min MongoDB cache.
+
+        Suppliers store many PSA/OEM references under non-canonical forms:
+        the same article may be indexed as the full 10-digit code, its first
+        6-8 digits, with/without leading zeros, or with a suffix (KIT/_S/_F).
+        When the primary ref returns nothing we automatically try a short
+        list of variants and surface whichever first returns hits.
+        """
         cached = await db.supplier_lookup_cache.find_one(
             {"source": source, "ref": ref},
             {"_id": 0, "items": 1, "fetched_at": 1},
@@ -1120,21 +1173,31 @@ async def oem_stock_search(
                     return cached.get("items") or []
             except Exception:
                 pass
-        # Fresh fetch with per-call 5s timeout
-        try:
-            items = await asyncio.wait_for(fetcher(ref), timeout=5.0)
-        except asyncio.TimeoutError:
-            return []  # don't poison the cache — try again next time
-        except Exception as e:
-            logging.warning(f"{source} fetch error for {ref}: {e}")
-            return []
-        if not isinstance(items, list):
-            items = []
+
+        async def _fetch_one(v: str) -> list:
+            try:
+                out = await asyncio.wait_for(fetcher(v), timeout=5.0)
+            except asyncio.TimeoutError:
+                return []
+            except Exception as e:
+                logging.warning(f"{source} fetch error for {v}: {e}")
+                return []
+            return out if isinstance(out, list) else []
+
+        items: list = []
+        matched_variant = ref
+        for v in oem_search_variants(ref):
+            items = await _fetch_one(v)
+            if items:
+                matched_variant = v
+                break
+
         await db.supplier_lookup_cache.update_one(
             {"source": source, "ref": ref},
             {"$set": {
                 "source": source,
                 "ref": ref,
+                "matched_variant": matched_variant,
                 "items": items,
                 "fetched_at": datetime.now(timezone.utc).isoformat(),
             }},

@@ -34,7 +34,7 @@ CATALOG = {
                         {"slug": "support-boot", "label": "Support Boîte", "search_keyword": "Support, Boîte automatique", "children": []},
                         {"slug": "support-moteur-d", "label": "Support Moteur D/G", "search_keyword": "Support moteur", "children": []},
                     ]},
-                    {"slug": "kit-chaine", "label": "Kit chaîne", "search_keyword": "chaine,distribution", "split_keywords": True, "children": []},
+                    {"slug": "kit-chaine", "label": "Kit chaîne", "search_keyword": "Kit,chaine,distribution,", "split_keywords": True, "children": []},
                     {"slug": "pompe-a-eau", "label": "Pompe à eau", "search_keyword": "Pompe à eau, refroidissement du moteur", "children": []},
                     {"slug": "radiateur-eau", "label": "Radiateur d'eau", "search_keyword": "Caisse à eau, radiateur", "children": []},
                     {"slug": "joint-culasse", "label": "Joint culasse", "search_keyword": "Joint d'étanchéité, culasse", "children": []},
