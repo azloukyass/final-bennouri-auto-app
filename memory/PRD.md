@@ -85,6 +85,16 @@ Build a French-language auto parts e-commerce platform "BENNOURI Pièces Auto" f
 
 ### P2
 - Multi-language toggle (FR / AR)
+
+### OEM Search Performance Fix (2026-06-30, post-Cloudflare 524)
+- iteration_3 regression: the new 4-variant fadpro fallback was ALSO running on Copia & PartsPro, which hold a per-instance asyncio.Lock that serialises every concurrent call. With ~25 parallel candidates × 4 variants × supplier lock = wall-time > 100 s → Cloudflare 524 ("origin returned invalid or incomplete response").
+- Fix:
+  1. `oem_search_variants` hard-capped to 3 entries (dropped the 8-char prefix middle variant).
+  2. New module constant `VARIANT_SOURCES = {"fadpro"}` — only FadPro runs the variant loop; Copia/PartsPro do a single canonical-ref call.
+  3. Per-variant timeout reduced from 5 s → 3 s for FadPro; Copia/PartsPro remain at 5 s single-shot.
+  4. Global endpoint `asyncio.wait_for` reduced from 60 s → 45 s for safety margin.
+- Verified live (iteration_4): cold-cache `GET /api/oem-stock-search?q=chaine,distribution&split=true&...` now completes in **5.12 s** (was >100 s). 14/14 tests pass; cache invariant holds (zero copia/partspro variant mismatches, 4 fresh fadpro fallback picks).
+- New regression test: `/app/backend/tests/test_oem_walltime_iteration4.py`.
 - Wishlist / save vehicles
 - Image gallery per part (multiple angles)
 - PDF invoice export
