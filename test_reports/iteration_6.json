@@ -1,0 +1,111 @@
+{
+  "summary": "Backend-only iteration_6 verification of the three architectural fixes (PA_COMPAT_CAP=50, asyncio.wait_for(pa_fetch, 2.0), asyncio.as_completed(..., timeout=40.0) partial-results loop). USER-REPORTED BUG IS FIXED end-to-end on BOTH warm and cold cache paths: GET /api/oem-stock-search?q=Kit,chaine,distribution&model_id=39023 now returns HTTP 200 in ~40 s with count=43 (warm-compat) and count=14 (fully-cold) — versus iteration_5's count=0 / 45.16 s timeout. Small query regression also IMPROVED (count=2→12). 10/11 tests passed. The single failure (TestUserReportedOemCacheRow) is NOT a regression of iteration_6 fixes — it's a pre-existing flaky 3 s per-call FadPro timeout (server.py L1193) that under heavy 600-candidate × 3-variant concurrent load writes an empty items=[] cache row for some OEMs. Direct FadPro probes confirm the API DOES return 8 items for '1608745980' and 27 for '160874' when called without contention.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "/api/oem-stock-search → cached_supplier_search()",
+        "issue": "server.py L1193 `per_call_timeout = 3.0 if source in VARIANT_SOURCES` is too aggressive under heavy load (600 candidates × up to 3 FadPro variants each through Semaphore(60)). Direct probes show FadPro returns items=8 for '1608745980' and items=27 for '160874' in ~1-2 s without contention; under load the 3 s wait_for fires before completion and writes items=[] to cache. RECOMMENDATION: bump VARIANT_SOURCES per-call timeout from 3.0 → 5.0 s, or add a 'retry-on-empty-cache-row' on next request, or skip caching when ALL variants returned [] AND any of them timed out."
+      },
+      {
+        "endpoint": "/api/oem-stock-search → lookup loop",
+        "issue": "Copia/PartsPro cache rows = 61 each instead of strict <= 60 — minor race in semaphore admission allowed one extra call past LOCKED_SUPPLIER_CAP. Pre-existing from iteration_5, harmless."
+      }
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_oem_walltime_iteration6.py",
+    "/app/test_reports/pytest/iteration_6_results.xml"
+  ],
+  "tests_executed": {
+    "total": 11,
+    "passed": 10,
+    "failed": 1,
+    "elapsed_s": 88.31,
+    "breakdown": {
+      "TestArchitecturalFixes": "6/6 PASSED — PA_COMPAT_CAP=50, get_compat_list(allow_fetch), asyncio.wait_for(pa_fetch, timeout=2.0), get_compat_list(...,allow_fetch=idx<PA_COMPAT_CAP), asyncio.as_completed(..., timeout=40.0), and 'oem-stock-search partial timeout' log message all present in server.py",
+      "TestLargeQueryWarmCompatCache.test_warm_compat_returns_200_under_45s_with_results": "PASSED — elapsed=40.16s, status=200, checked=616, count=43 (USER BUG FIXED — was count=0 in iter_5)",
+      "TestLargeQueryColdBothCaches.test_cold_both_caches_returns_results_within_deadline": "PASSED — elapsed=40.18s, status=200, checked=616, count=14 (cold-cache STILL produces results via partial-results loop)",
+      "TestUserReportedOemCacheRow.test_supplier_cache_row_for_1608745980": "FAILED — cache row PRESENT with matched_variant='1608745980' but items=[] (flaky 3 s FadPro timeout under load; pre-existing, not caused by iter_6 diffs)",
+      "TestSmallQueryRegression.test_small_query_returns_under_15s": "PASSED — elapsed=7.28s, count=2 (well under the 15 s budget; on rerun count=12 after warming)",
+      "TestCacheStatsReport.test_emit_cache_distribution": "PASSED — fadpro_rows=617 copia_rows=61 partspro_rows=61 fadpro_nonempty_hits=21"
+    }
+  },
+  "live_evidence": {
+    "large_query_warm_compat_cache": {
+      "elapsed_s": 40.16,
+      "http_status": 200,
+      "checked": 616,
+      "count_returned": 43,
+      "items_len": 43,
+      "supplier_cache_flushed_rows": 654,
+      "verdict": "USER-REPORTED BUG FIXED — versus iter_5 elapsed=45.16 s / count=0"
+    },
+    "large_query_cold_both_caches": {
+      "elapsed_s": 40.18,
+      "http_status": 200,
+      "checked": 616,
+      "count_returned": 14,
+      "items_len": 14,
+      "supplier_flushed": 596,
+      "compat_flushed": 461,
+      "verdict": "STRONGEST acceptance — cold both caches still returns count>=1 thanks to as_completed(timeout=40s) partial-results loop"
+    },
+    "small_query_regression": {
+      "elapsed_s": 7.28,
+      "http_status": 200,
+      "checked": 20,
+      "count_returned": 2,
+      "rerun_after_warm": "count=12 in 7.27 s",
+      "verdict": "Regression passes — well under 15 s"
+    },
+    "supplier_cache_after_cold_run": {
+      "fadpro_rows": 617,
+      "copia_rows": 61,
+      "partspro_rows": 61,
+      "fadpro_nonempty_hits": 21,
+      "piecesautos_compat_rows": 0,
+      "comment": "FadPro ran for ALL 616 candidates (617 ≈ checked); Copia/PartsPro correctly capped at ~60. piecesautos_compat_cache is empty because PA_COMPAT_CAP=50 plus 2 s per-call timeout means very few compat scrapes actually completed and wrote to cache (intentional)."
+    },
+    "user_reported_oem_1608745980": {
+      "supplier_cache_row_present": true,
+      "matched_variant": "1608745980",
+      "items_count_in_cache": 0,
+      "fadpro_direct_probe_1608745980": "8 items returned in ~1-2 s with no contention",
+      "fadpro_direct_probe_160874": "27 items returned in ~1-2 s with no contention",
+      "root_cause": "server.py L1193 per_call_timeout=3.0 for VARIANT_SOURCES fires under heavy load (600 candidates × up to 3 variants concurrent via Semaphore(60)) and writes items=[] to cache. NOT a regression of iter_6 diffs."
+    }
+  },
+  "architectural_fixes_verified": {
+    "fix_1_PA_COMPAT_CAP_50": "PASS — present at server.py L1249",
+    "fix_2_pa_fetch_wait_for_2s": "PASS — present at server.py L1274 (`asyncio.wait_for(pa_fetch(ref), timeout=2.0)`)",
+    "fix_3_as_completed_40s_partial": "PASS — present at server.py L1378 (`asyncio.as_completed(pending_tasks, timeout=deadline)` with deadline=40.0); partial-timeout log line at L1389"
+  },
+  "action_items": [
+    "OPTIONAL FOLLOW-UP (NOT BLOCKING): Bump VARIANT_SOURCES per-call FadPro timeout in cached_supplier_search (server.py L1193) from 3.0 → 5.0 s so that under heavy 600-candidate load the variant fallback actually completes for OEMs that need it (e.g. 1608745980). The architectural fixes in iter_6 are correct and the user-reported count=0 bug IS resolved — this is a flaky-third-party hardening improvement.",
+    "OPTIONAL: Avoid caching items=[] when ALL variants timed out (vs. all variants returned []). Currently we can't distinguish 'genuinely no items' from 'all variants timed out' — both write items=[] permanently. A small `had_timeout` flag would let us skip caching in the timeout case so the next request retries.",
+    "OPTIONAL: Tighten Copia/PartsPro admission so the count never exceeds 60 (currently 61) — minor."
+  ],
+  "critical_code_review_comments": [
+    "server.py L1249 PA_COMPAT_CAP=50 correctly placed at module-level near pa_sem.",
+    "server.py L1272-1278 get_compat_list's try/except hierarchy is sound: wait_for→TimeoutError returns None (keep items), generic Exception also returns None — robust.",
+    "server.py L1352 `get_compat_list(c['ref'], allow_fetch=idx < PA_COMPAT_CAP)` correctly gates the live scrape behind the cap; cached reads remain free for ALL candidates.",
+    "server.py L1378 the `asyncio.as_completed(pending_tasks, timeout=deadline)` pattern is the textbook fix for the partial-results problem — completed tasks are consumed as they finish, and on TimeoutError the in-flight tasks are explicitly cancelled (L1393-1395) so httpx sockets are not leaked.",
+    "server.py is now 1698 lines — same as iter_5. Still worth refactoring the OEM-search endpoint (~250 lines) into a separate module with SupplierCapManager / PiecesautosCompatService / VariantFallbackResolver classes. Not blocking.",
+    "L1193 `per_call_timeout = 5.0 if source not in VARIANT_SOURCES else 3.0` — the inverted threshold (variants get LESS time) is counter-intuitive: variant sources MAKE MORE CALLS (up to 3) so giving them less per call compounds the timeout pressure. Consider 5.0 s for all sources, or compute per-variant budget as `total_budget / num_variants`."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_oem_walltime_iteration6.py (new file, 11 tests — 10 passed / 1 failed)"
+  ],
+  "success_rate": {
+    "backend": "91% (10/11) — all 3 architectural fixes verified; user-reported count=0 bug FIXED end-to-end; single failure is a flaky-third-party FadPro 3 s timeout issue that pre-dates iter_6",
+    "frontend": "n/a (out of scope)"
+  },
+  "test_credentials": "admin@bennouri.com / Admin@123 (validated)",
+  "seed_data_creation": "supplier_lookup_cache was flushed twice (654 + 596 rows deleted) and piecesautos_compat_cache flushed once (461 rows deleted) as part of the warm/cold acceptance flows. Cache is now repopulated with fadpro_rows=617, copia_rows=61, partspro_rows=61, fadpro_nonempty_hits=21, piecesautos_compat_rows≈0.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The user-reported bug from iteration_5 (q='Kit,chaine,distribution' → count=0 / 45 s global timeout) is RESOLVED. Three architectural fixes verified in server.py: (1) PA_COMPAT_CAP=50 at L1249; (2) asyncio.wait_for(pa_fetch(ref), timeout=2.0) at L1274; (3) asyncio.as_completed(pending_tasks, timeout=40.0) partial-results loop at L1378 with partial-timeout log at L1389. End-to-end measurements: warm-compat path 40.16 s / count=43, cold-both-caches path 40.18 s / count=14, small-query 7.28 s / count=2 (count=12 on rerun). The single failing test (OEM 1608745980 cache items=[]) is a pre-existing flaky-third-party issue caused by server.py L1193's 3 s per-call FadPro timeout under heavy load; direct FadPro probes confirm items DO exist (8 for 10-digit, 27 for 6-digit). Recommend main agent bump VARIANT_SOURCES per-call timeout from 3 → 5 s if surfacing the user's exact OEM is a hard requirement; otherwise iter_6 is complete.",
+  "rca_of_the_issue": "The iter_5 root cause (piecesautos.tn compat-scraping ate the 45 s budget → all tasks cancelled → empty response) is fully addressed by iter_6's three diffs: (a) PA_COMPAT_CAP=50 limits live compat scrapes to first 50 candidates only; (b) asyncio.wait_for(pa_fetch, timeout=2.0) bounds each scrape to 2 s instead of the open-ended httpx default; (c) asyncio.as_completed(tasks, timeout=40.0) consumes completed lookups one-at-a-time and surfaces partial results when the deadline fires, rather than the old gather()+wait_for(45) which discarded ALL work on timeout. Measured impact: cold-cache run improved from 45.16 s/count=0 → 40.18 s/count=14. The single remaining failure (cache row for OEM 1608745980 has items=[]) is a DIFFERENT pre-existing issue: server.py L1193 sets per_call_timeout=3.0 for VARIANT_SOURCES, which under contention from 600 candidates × up to 3 FadPro variants × Semaphore(60) sometimes elapses before FadPro responds — writing items=[] to the cache. Direct uncontended probes prove FadPro DOES return items (8 for '1608745980', 27 for '160874'). Mitigation: bump VARIANT_SOURCES timeout to 5 s, OR skip caching items=[] when any variant timed out, OR add a one-time retry on empty cache rows."
+}

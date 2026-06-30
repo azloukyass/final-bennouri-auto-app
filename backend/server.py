@@ -1243,27 +1243,49 @@ async def oem_stock_search(
 
     pa_sem = asyncio.Semaphore(10)
     COMPAT_TTL = 7 * 24 * 3600  # 7 days
+    # Cap piecesautos.tn compatibility scraping the same way Copia/PartsPro
+    # are capped — many ReadTimeouts at 5-10 s each easily exhaust the 45 s
+    # endpoint budget when 600+ refs need compat checks.
+    PA_COMPAT_CAP = 50
 
-    async def get_compat_list(ref: str):
-        """Cached piecesautos.tn compatibility fetch (per OEM ref)."""
+    async def get_compat_list(ref: str, allow_fetch: bool = True):
+        """Cached piecesautos.tn compatibility fetch (per OEM ref).
+
+        - If `model_toks` is empty, returns None (compat filter disabled).
+        - Always reads the warm cache for free.
+        - When `allow_fetch=False` (idx past PA_COMPAT_CAP), returns None
+          on a cache miss so the caller skips the compat filter and keeps
+          the picked items.
+        - When fetching, the live scrape is wrapped in `asyncio.wait_for`
+          with a 2 s budget so a single slow ReadTimeout no longer
+          compounds into the global timeout.
+        """
         if not model_toks:
-            return None  # skip filter entirely
+            return None  # filter disabled
         cached = await db.piecesautos_compat_cache.find_one(
             {"ref": ref}, {"_id": 0, "compat": 1, "fetched_at": 1}
         )
         if cached and cached.get("compat") is not None:
             return cached["compat"]
-        async with pa_sem:
-            compat = await pa_fetch(ref)
-        await db.piecesautos_compat_cache.update_one(
-            {"ref": ref},
-            {"$set": {
-                "ref": ref,
-                "compat": compat,
-                "fetched_at": datetime.now(timezone.utc).isoformat(),
-            }},
-            upsert=True,
-        )
+        if not allow_fetch:
+            return None  # cap exceeded — let caller keep the picked items
+        try:
+            async with pa_sem:
+                compat = await asyncio.wait_for(pa_fetch(ref), timeout=2.0)
+        except asyncio.TimeoutError:
+            compat = None  # treat as "couldn't check" → keep items
+        except Exception:
+            compat = None
+        if compat is not None:
+            await db.piecesautos_compat_cache.update_one(
+                {"ref": ref},
+                {"$set": {
+                    "ref": ref,
+                    "compat": compat,
+                    "fetched_at": datetime.now(timezone.utc).isoformat(),
+                }},
+                upsert=True,
+            )
         return compat
 
     async def lookup(c, idx: int):
@@ -1318,16 +1340,18 @@ async def oem_stock_search(
 
             # Vehicle-compatibility filter (only when client passed vehicle_name).
             # Items whose supplier designation already mentions the model are
-            # kept immediately. The rest are checked against piecesautos.tn.
+            # kept immediately. The rest are checked against piecesautos.tn —
+            # but only for the first PA_COMPAT_CAP candidates (compat scrape
+            # is slow; past the cap we trust the supplier match).
             if model_toks and picked:
                 # Cheap-path first: any item that already mentions the model
                 cheap_pass = [it for it in picked if pa_title_match(it.get("designation") or "", model_toks)]
                 if cheap_pass:
                     return cheap_pass
-                # Slow-path: scrape compatibility list (one fetch per ref, cached)
-                compat = await get_compat_list(c["ref"])
+                # Slow-path: scrape compatibility list (cached; bounded by cap)
+                compat = await get_compat_list(c["ref"], allow_fetch=idx < PA_COMPAT_CAP)
                 if compat is None:
-                    return picked  # no model_toks — shouldn't reach here
+                    return picked  # filter disabled or cap exceeded → keep
                 if not compat or pa_compat_match(compat, manu_norm, model_toks):
                     return picked
                 # Compatibility check explicitly returned False → drop
@@ -1338,17 +1362,37 @@ async def oem_stock_search(
     # semaphore inside `lookup`). FadPro is variant-aware (≤3 calls per
     # ref × 3 s) and runs for ALL candidates; Copia/PartsPro are single-shot
     # and only run for the first LOCKED_SUPPLIER_CAP candidates (to avoid
-    # the per-instance lock serialising hundreds of refs). A global 45 s
-    # timeout protects against Cloudflare's 100 s gateway limit.
+    # the per-instance lock serialising hundreds of refs). A global 40 s
+    # deadline applies — instead of cancelling all tasks (which throws
+    # away ALL completed lookups), we collect whatever finished by the
+    # deadline via `asyncio.as_completed` and return those partial results.
+    # This is essential when 600+ candidates are checked: even if 100
+    # lookups finish, the user must see those items rather than a blank
+    # page caused by the few slow ones.
     checked = len(candidates)
+    all_results: list = []
+    deadline = 40.0
+    started = asyncio.get_event_loop().time()
+    pending_tasks = [asyncio.create_task(lookup(c, i)) for i, c in enumerate(candidates)]
     try:
-        all_results = await asyncio.wait_for(
-            asyncio.gather(*[lookup(c, i) for i, c in enumerate(candidates)]),
-            timeout=45.0,
-        )
+        for fut in asyncio.as_completed(pending_tasks, timeout=deadline):
+            try:
+                batch = await fut
+            except Exception:
+                batch = []
+            if batch:
+                all_results.append(batch)
     except asyncio.TimeoutError:
-        logging.warning(f"oem-stock-search global timeout for q={query!r}")
-        all_results = []
+        elapsed = asyncio.get_event_loop().time() - started
+        done = sum(1 for t in pending_tasks if t.done())
+        logging.warning(
+            f"oem-stock-search partial timeout for q={query!r}: "
+            f"{done}/{len(pending_tasks)} candidates finished in {elapsed:.1f}s"
+        )
+        # Cancel the laggards so we don't leak open httpx sockets
+        for t in pending_tasks:
+            if not t.done():
+                t.cancel()
 
     results = []
     seen_refs = set()
