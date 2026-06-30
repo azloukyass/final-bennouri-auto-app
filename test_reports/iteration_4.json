@@ -1,0 +1,76 @@
+{
+  "summary": "Backend-only iteration_4 testing of the OEM stock-search performance fix. Verified the variant list cap (max 3, 8-char prefix removed) for all 7 ticket cases, confirmed VARIANT_SOURCES = {'fadpro'} is wired into server.py, measured the end-to-end /api/oem-stock-search wall-time at 5.12 s on a cold-cache cold-path call (well below the 50 s acceptance budget and the 45 s asyncio.wait_for global timeout), and validated the cache invariant — only source='fadpro' rows hold matched_variant != ref, zero copia/partspro mismatches.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_oem_walltime_iteration4.py",
+    "/app/test_reports/pytest/iteration_4_results.xml"
+  ],
+  "tests_executed": {
+    "total": 15,
+    "passed": 14,
+    "skipped": 1,
+    "failed": 0,
+    "elapsed_s": 18.43,
+    "breakdown": {
+      "TestOemSearchVariantsIteration4": "10/10 PASSED (7 parametrized exact-list cases + cap=3 + 8-char-prefix-removed + empty/None)",
+      "TestVariantSourcesConstant": "1/1 PASSED (VARIANT_SOURCES = {'fadpro'} present + variant-source gate wired)",
+      "TestOemStockSearchWalltime": "2/2 PASSED (HTTP 200 in 5.12 s; no global-timeout log msg during run)",
+      "TestSupplierLookupCacheInvariants": "1 PASS + 1 SKIP — copia/partspro have zero variant mismatches (PASS); FadPro row for ref=1608745980 was not produced by this query's candidate set (SKIP, not a regression)"
+    }
+  },
+  "live_evidence": {
+    "endpoint_wall_time_s": 5.12,
+    "endpoint_http_status": 200,
+    "endpoint_checked_candidates": 20,
+    "endpoint_items_returned": 11,
+    "cache_after_run": {
+      "total_rows": 60,
+      "fadpro_rows": 20,
+      "copia_rows": 20,
+      "partspro_rows": 20,
+      "fadpro_rows_with_variant_fallback_picked": 4,
+      "copia_partspro_rows_with_variant_mismatch": 0,
+      "sample_fadpro_fallback_picks": [
+        "ref=1145953 → matched_variant=114595 (items=9)",
+        "ref=9807238580 → matched_variant=980723 (items=3)",
+        "ref=9823954880 → matched_variant=982395 (items=2)",
+        "ref=9830301180 → matched_variant=983030 (items=1)"
+      ]
+    },
+    "global_timeout_during_run": false,
+    "cloudflare_524_risk": "eliminated — 5.12 s wall-time is 20x under the 100 s gateway"
+  },
+  "variant_list_evidence": {
+    "1608745980":    ["1608745980", "160874"],
+    "1610577780KIT": ["1610577780KIT", "1610577780", "161057"],
+    "083075":        ["083075", "83075"],
+    "83075":         ["83075", "083075"],
+    "0516A3":        ["0516A3"],
+    "FM5Q6B217AA":   ["FM5Q6B217AA"],
+    "1608747680_S":  ["1608747680_S", "1608747680", "160874"]
+  },
+  "action_items": [
+    "No fix required — performance ticket is GREEN. Wall-time 5.12 s ≪ 50 s budget."
+  ],
+  "critical_code_review_comments": [
+    "cached_supplier_search is still defined INSIDE the endpoint coroutine (~line 1163 in server.py) which makes VARIANT_SOURCES unimportable from tests. Test had to use source-string inspection. Hoisting to module scope would simplify unit testing.",
+    "server.py is 1639 lines — out of scope to refactor this iteration but the size warrants splitting catalog/oem/admin routers.",
+    "lookup() inside /api/oem-stock-search fires fadpro+copia+partspro in parallel per candidate via asyncio.gather. The FadPro path now does up to 3 sequential variant calls (3 s each = 9 s worst-case) while Copia/PartsPro are single-shot (5 s each). With Semaphore-bounded concurrency this fits comfortably in the 45 s global budget — confirmed live at 5.12 s.",
+    "The 'global timeout' log line we found in backend.err.log is historical (from the iteration_3 multi-variant regression) — it did NOT recur during this run; items=11 returned proves the global wait_for completed normally.",
+    "supplier_lookup_cache schema is consistent post-fix: every row now carries matched_variant + items + fetched_at."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_oem_walltime_iteration4.py (new file, 15 tests)"
+  ],
+  "success_rate": {"backend": "100% (14/14 executable tests passed; 1 skip due to TecDoc candidate-set composition for q='chaine,distribution')", "frontend": "n/a (out of scope this iteration)"},
+  "test_credentials": "admin@bennouri.com / Admin@123 (login validated, JWT obtained)",
+  "seed_data_creation": "supplier_lookup_cache was wiped via db.supplier_lookup_cache.delete_many({}) (60 rows removed) and repopulated by the timed cold-path call (60 rows: 20 fadpro + 20 copia + 20 partspro).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "iteration_4 fix has landed and is GREEN. Cold-cache wall-time for q='chaine,distribution' (model_id=39023, vehicle CITROËN BERLINGO K9, VIN VR7EF9HNAKJ575626) is 5.12 s on a freshly flushed cache. VARIANT_SOURCES={'fadpro'} hard-codes the variant-fallback to FadPro only. The 1608745980 FadPro regression case from iteration_2 was not produced by this query's candidate set, but the same mechanism is demonstrated by 4 other fadpro rows (1145953→114595, 9807238580→980723, 9823954880→982395, 9830301180→983030). Tests written: /app/backend/tests/test_oem_walltime_iteration4.py (14 pass + 1 skip in ~18 s).",
+  "rca_of_the_issue": "RCA: iteration_3 introduced a 4-variant fadpro fallback that was ALSO running on Copia & PartsPro, both of which hold a per-supplier asyncio.Lock (iis_supplier_client.py line 133: 'async with self._lock'). With ~25 concurrent candidates × 3-4 variants × serialised lock = total wall-time > 100 s, tripping Cloudflare 524. iteration_4 fix: (1) hard-cap oem_search_variants to 3 entries and drop the 8-char prefix (was a marginal-utility middle variant); (2) gate the variant loop behind VARIANT_SOURCES={'fadpro'} so Copia/PartsPro now do exactly one search call each; (3) per-variant timeout 3 s for FadPro (3 calls × 3 s = 9 s worst-case) and 5 s single-shot for Copia/PartsPro; (4) tightened global asyncio.wait_for from 60 s → 45 s. Measured cold-cache wall-time after fix: 5.12 s (20x safety margin under Cloudflare 100 s). Cache invariants hold: zero copia/partspro variant mismatches, four legitimate fadpro fallback picks per the timed run."
+}

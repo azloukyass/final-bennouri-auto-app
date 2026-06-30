@@ -386,9 +386,11 @@ def oem_search_variants(ref: str) -> List[str]:
         083075            → 83075          (strip leading zero)
         83075             → 083075         (add leading zero for short refs)
 
-    The list is ordered: the original ref is always tried first, then
-    suffix-stripped, then numeric prefixes (8 then 6 chars), then
-    zero-padding tweaks. Duplicates removed while preserving order.
+    Capped at MAX 3 variants total — beyond that the partner calls (Copia /
+    PartsPro hold a per-supplier lock that serialises every concurrent
+    lookup) blow past Cloudflare's 100 s gateway limit. Order of priority:
+    original → suffix-stripped → first-6-digit prefix → zero-padding tweak.
+    Duplicates removed while preserving order.
     """
     ref = (ref or "").strip()
     if not ref:
@@ -400,22 +402,21 @@ def oem_search_variants(ref: str) -> List[str]:
         out.append(base)
     # 2) numeric-only fallbacks (PSA / Renault style refs)
     if base.isdigit():
-        if len(base) >= 8:
-            out.append(base[:8])
-        if len(base) >= 6:
+        if len(base) >= 7:
             out.append(base[:6])
         stripped = base.lstrip("0")
         if stripped and stripped != base:
             out.append(stripped)
-        # add a leading zero for 5-digit numerics (e.g. 83075 → 083075)
-        if 5 <= len(base) <= 6 and not base.startswith("0"):
+        elif 5 <= len(base) <= 6 and not base.startswith("0"):
             out.append("0" + base)
-    # dedupe preserving order
+    # dedupe preserving order + hard cap at 3 variants
     seen, dedup = set(), []
     for v in out:
         if v and v not in seen:
             seen.add(v)
             dedup.append(v)
+        if len(dedup) >= 3:
+            break
     return dedup
 
 
@@ -1152,14 +1153,21 @@ async def oem_stock_search(
     # timeouts cancel partial responses.
     SUPPLIER_CACHE_TTL_S = 600
 
+    # FadPro has no per-instance lock so it can absorb the variant loop
+    # cheaply. Copia & PartsPro hold a per-supplier asyncio.Lock that
+    # serialises every concurrent lookup — running 2-3 variants there would
+    # multiply tail latency by 2-3x and trip Cloudflare's 100 s gateway.
+    # We therefore restrict the variant fallback to FadPro only.
+    VARIANT_SOURCES = {"fadpro"}
+
     async def cached_supplier_search(source: str, ref: str, fetcher):
         """Return the raw supplier list for `ref`, with 10-min MongoDB cache.
 
-        Suppliers store many PSA/OEM references under non-canonical forms:
-        the same article may be indexed as the full 10-digit code, its first
-        6-8 digits, with/without leading zeros, or with a suffix (KIT/_S/_F).
-        When the primary ref returns nothing we automatically try a short
-        list of variants and surface whichever first returns hits.
+        FadPro stores many PSA/OEM references under non-canonical forms
+        (suffix-stripped, short prefix, with/without leading zero). For
+        FadPro we try a tiny ordered list of variants and surface whichever
+        first returns hits; for Copia/PartsPro we only try the canonical
+        ref to keep the per-supplier lock contention low.
         """
         cached = await db.supplier_lookup_cache.find_one(
             {"source": source, "ref": ref},
@@ -1174,9 +1182,11 @@ async def oem_stock_search(
             except Exception:
                 pass
 
+        per_call_timeout = 5.0 if source not in VARIANT_SOURCES else 3.0
+
         async def _fetch_one(v: str) -> list:
             try:
-                out = await asyncio.wait_for(fetcher(v), timeout=5.0)
+                out = await asyncio.wait_for(fetcher(v), timeout=per_call_timeout)
             except asyncio.TimeoutError:
                 return []
             except Exception as e:
@@ -1184,9 +1194,10 @@ async def oem_stock_search(
                 return []
             return out if isinstance(out, list) else []
 
+        variants = oem_search_variants(ref) if source in VARIANT_SOURCES else [ref]
         items: list = []
         matched_variant = ref
-        for v in oem_search_variants(ref):
+        for v in variants:
             items = await _fetch_one(v)
             if items:
                 matched_variant = v
@@ -1310,14 +1321,15 @@ async def oem_stock_search(
             return picked
 
     # Process ALL candidates in parallel (concurrency is bounded by the
-    # semaphore inside `lookup`). This keeps total wall-time roughly equal to
-    # `ceil(N_candidates / 25) × 5s` instead of `N_candidates × 5s` sequential.
-    # A global 60 s timeout protects against Cloudflare's 100 s gateway limit.
+    # semaphore inside `lookup`). FadPro is variant-aware (≤3 calls per
+    # ref × 3 s) and Copia/PartsPro are single-shot (≤5 s) so each ref
+    # finishes in ≤ 14 s worst-case. A global 45 s timeout protects against
+    # Cloudflare's 100 s gateway limit with a healthy margin.
     checked = len(candidates)
     try:
         all_results = await asyncio.wait_for(
             asyncio.gather(*[lookup(c) for c in candidates]),
-            timeout=60.0,
+            timeout=45.0,
         )
     except asyncio.TimeoutError:
         logging.warning(f"oem-stock-search global timeout for q={query!r}")
