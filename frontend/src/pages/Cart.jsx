@@ -1,7 +1,8 @@
 import { Link, useNavigate } from "react-router-dom";
 import { Trash2, Plus, Minus, ShoppingCart, ArrowLeft, Truck, Shield, ShieldCheck } from "lucide-react";
 import { useCart } from "@/context/CartContext";
-import { formatPrice } from "@/lib/api";
+import { api, formatPrice } from "@/lib/api";
+import { useEffect, useState } from "react";
 
 const FREE_SHIPPING_THRESHOLD = 100; // DT
 
@@ -9,6 +10,41 @@ export default function Cart() {
   const { items, updateQty, remove, total } = useCart();
   const navigate = useNavigate();
   const freeShipping = total >= FREE_SHIPPING_THRESHOLD;
+  const [images, setImages] = useState({});      // { [ref]: s3image_url | null }
+  const [imgErrors, setImgErrors] = useState({}); // { [ref]: true }
+
+useEffect(() => {
+  let cancelled = false;
+  const refsToFetch = items
+    .map((p) => p.oemRef || p.ref)
+    .filter((ref) => ref && images[ref] === undefined);
+
+  if (refsToFetch.length === 0) return;
+
+  (async () => {
+    const results = await Promise.all(
+      refsToFetch.map((ref) =>
+        api
+          .get(`/rapidapi/article-info`, { params: { ref } })
+          .then(({ data }) => [ref, data?.article?.s3image || null])
+          .catch(() => [ref, null])
+      )
+    );
+    if (cancelled) return;
+    setImages((prev) => {
+      const next = { ...prev };
+      results.forEach(([ref, url]) => { next[ref] = url; });
+      return next;
+    });
+  })();
+
+  return () => { cancelled = true; };
+}, [items, images]);
+  
+  const goToDetail = (ref) => {
+    if (!ref) return;
+    navigate(`/article/${encodeURIComponent(ref)}`);
+  };
 
   if (items.length === 0) {
     return (
@@ -29,7 +65,7 @@ export default function Cart() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10" data-testid="cart-page">
       <div className="flex items-center justify-between mb-8">
         <h1 className="font-display text-3xl sm:text-4xl font-black text-slate-900 tracking-tight uppercase">
-          Votre panier <span className="text-slate-400 font-bold">({items.length})</span>
+          Votre panier
         </h1>
         <Link to="/" className="hidden sm:inline-flex items-center gap-1 text-sm text-slate-600 hover:text-red-600 font-semibold">
           <ArrowLeft className="w-4 h-4" /> Continuer mes achats
@@ -53,20 +89,43 @@ export default function Cart() {
                 className="grid grid-cols-[1fr_40px] md:grid-cols-[1fr_140px_140px_120px_40px] gap-4 px-5 py-4 border-b border-slate-100 items-center"
                 data-testid={`cart-item-${p.ref}`}
               >
-                {/* Product */}
-                <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 sm:w-20 sm:h-20 bg-slate-100 rounded-sm flex-shrink-0 overflow-hidden flex items-center justify-center">
-                    {p.image ? (
-                      <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <ShoppingCart className="w-6 h-6 text-slate-300" />
-                    )}
-                  </div>
+                {/* Product — clickable, navigates to article detail */}
+                <div
+                  className="flex items-center gap-4 cursor-pointer group"
+                  onClick={() => goToDetail(p.ref)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") goToDetail(p.ref);
+                  }}
+                  data-testid={`cart-item-link-${p.ref}`}
+                >
+              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-slate-100 rounded-sm flex-shrink-0 overflow-hidden flex items-center justify-center" data-testid={`cart-image-container-${p.ref}`}>
+  {(() => {
+    const lookupRef = p.oemRef || p.ref;
+    const url = images[lookupRef];
+    if (url === undefined) {
+      return <div className="w-4 h-4 border-2 border-slate-300 border-t-red-600 rounded-full animate-spin" />;
+    }
+    if (!url || imgErrors[lookupRef]) {
+      return <ShoppingCart className="w-6 h-6 text-slate-300" />;
+    }
+    return (
+      <img
+        src={url}
+        alt={p.name}
+        className="w-full h-full object-contain mix-blend-multiply p-1.5"
+        onError={() => setImgErrors((prev) => ({ ...prev, [lookupRef]: true }))}
+        data-testid={`cart-image-${p.ref}`}
+      />
+    );
+  })()}
+</div>
                   <div className="min-w-0">
-                    <div className="font-display font-bold text-slate-900 text-sm sm:text-base leading-tight" data-testid={`cart-name-${p.ref}`}>{p.name}</div>
-                    <div className="text-xs text-slate-500 mt-0.5">{p.brand || ""} · <span className="font-mono-vin">{p.ref}</span></div>
-                    {/* Mobile: price + qty inline */}
-                    <div className="md:hidden mt-2 flex items-center justify-between">
+                    <div className="font-display font-bold text-slate-900 text-sm sm:text-base leading-tight group-hover:text-red-600 transition-colors" data-testid={`cart-name-${p.ref}`}>{p.name}</div>
+                    <div className="text-xs text-slate-500 mt-0.5"><span className="font-mono-vin">{p.ref}</span></div>
+                    {/* Mobile: price + qty inline (stop propagation so it doesn't navigate) */}
+                    <div className="md:hidden mt-2 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
                       <span className="text-sm font-bold text-slate-900">{formatPrice(p.price_tnd)}</span>
                       <div className="inline-flex items-center border border-slate-300 rounded-sm">
                         <button onClick={() => updateQty(p.ref, p.quantity - 1)} className="px-2 py-1 hover:bg-slate-50"><Minus className="w-3.5 h-3.5" /></button>
@@ -80,7 +139,7 @@ export default function Cart() {
                 <div className="hidden md:block text-center text-sm font-semibold text-slate-700" data-testid={`cart-unit-${p.ref}`}>
                   {formatPrice(p.price_tnd)}
                 </div>
-                <div className="hidden md:flex items-center justify-center">
+                <div className="hidden md:flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
                   <div className="inline-flex items-center border border-slate-300 rounded-sm">
                     <button onClick={() => updateQty(p.ref, p.quantity - 1)} className="px-2 py-1.5 hover:bg-slate-50" data-testid={`qty-minus-${p.ref}`}><Minus className="w-3.5 h-3.5" /></button>
                     <span className="px-3 text-sm font-bold w-8 text-center">{p.quantity}</span>
@@ -90,7 +149,12 @@ export default function Cart() {
                 <div className="hidden md:block text-right font-display font-black text-slate-900" data-testid={`cart-line-total-${p.ref}`}>
                   {formatPrice(p.price_tnd * p.quantity)}
                 </div>
-                <button onClick={() => remove(p.ref)} className="text-slate-400 hover:text-red-600 justify-self-end" aria-label="Supprimer" data-testid={`cart-remove-${p.ref}`}>
+                <button
+                  onClick={(e) => { e.stopPropagation(); remove(p.ref); }}
+                  className="text-slate-400 hover:text-red-600 justify-self-end"
+                  aria-label="Supprimer"
+                  data-testid={`cart-remove-${p.ref}`}
+                >
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>

@@ -19,6 +19,14 @@ LANG_FR = 6  # TecDoc language id for French
 TYPE_ID = 1  # passenger car
 
 
+class RapidApiQuotaExceeded(RuntimeError):
+    """Raised when RapidAPI returns HTTP 429 (monthly quota exhausted)."""
+    def __init__(self, api: str, detail: str = ""):
+        super().__init__(f"RapidAPI {api} quota exceeded: {detail[:200]}")
+        self.api = api
+        self.detail = detail
+
+
 def _api_key() -> str:
     k = os.environ.get("RAPIDAPI_KEY", "")
     if not k:
@@ -81,8 +89,9 @@ async def list_vehicles_for_model(model_id: int, lang_id: int = LANG_FR,
     try:
         async with httpx.AsyncClient(timeout=30.0) as cl:
             r = await cl.get(url, headers=_headers())
+            logger.warning(f"RapidAPI list-vehicles CALL url={url}")
+            logger.warning(f"RapidAPI list-vehicles STATUS={r.status_code} BODY={r.text[:1000]}")
             if r.status_code != 200:
-                logger.warning(f"RapidAPI list-vehicles → {r.status_code}: {r.text[:200]}")
                 return []
             data = r.json()
             if isinstance(data, dict):
@@ -93,7 +102,7 @@ async def list_vehicles_for_model(model_id: int, lang_id: int = LANG_FR,
                 items = []
             return items if isinstance(items, list) else []
     except Exception as e:
-        logger.warning(f"RapidAPI list-vehicles error: {e}")
+        logger.warning(f"RapidAPI list-vehicles EXCEPTION: {e}")
         return []
 
 
@@ -204,6 +213,9 @@ async def search_oem(vehicle_id: int, search_param: str, lang_id: int = LANG_FR)
     try:
         async with httpx.AsyncClient(timeout=30.0) as cl:
             r = await cl.get(url, headers=_headers())
+            if r.status_code == 429:
+                logger.warning(f"RapidAPI search-oem quota exhausted (429): {r.text[:200]}")
+                raise RapidApiQuotaExceeded("auto-parts-catalog", r.text)
             if r.status_code != 200:
                 logger.warning(f"RapidAPI search-oem → {r.status_code}: {r.text[:200]}")
                 return []
@@ -220,8 +232,109 @@ async def search_oem(vehicle_id: int, search_param: str, lang_id: int = LANG_FR)
                 seen.add(oem)
                 out.append({"ref": oem, "name": name})
             return out
+    except RapidApiQuotaExceeded:
+        raise
     except Exception as e:
         logger.warning(f"RapidAPI search-oem error: {e}")
+        return []
+
+async def search_by_article_oem_no(article_oem_no: str, lang_id: int = LANG_FR):
+    ref = (article_oem_no or "").strip()
+    if not ref:
+        return []
+
+    url = f"{API_BASE}/articles-oem/search-by-article-oem-no"
+
+    logger.warning(f"CALL URL: {url}")
+    logger.warning(f"OEM REF: {ref}")
+    logger.warning(f"HEADERS: {_headers()}")
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as cl:
+            r = await cl.get(
+                url,
+                headers=_headers(),
+                params={
+                    "langId": lang_id,
+                    "articleOemNo": ref,
+                },
+            )
+
+        logger.warning(f"STATUS: {r.status_code}")
+        logger.warning(f"RAW RESPONSE: {r.text[:300]}")
+
+        if r.status_code != 200:
+            return []
+
+        try:
+            data = r.json()
+        except Exception:
+            logger.warning("JSON parse failed")
+            return []
+
+        if isinstance(data, list):
+            return data
+
+        if isinstance(data, dict):
+            return data.get("articles") or data.get("data") or []
+
+        return []
+
+    except Exception as e:
+        logger.exception("FULL OEM SEARCH CRASH")
+        return []
+
+
+async def get_compatible_cars_by_article_number(article_no: str, type_id: int = 1,
+                                                 lang_id: int = LANG_FR,
+                                                 country_filter_id: int = 63) -> List[Dict]:
+    """Return the list of vehicles compatible with a given supplier
+    articleNo, via /articles/get-compatible-cars-by-article-number.
+    Each item is expected to carry at least {manufacturerName,
+    typeEngineName, modelName, vehicleId}."""
+    no = (article_no or "").strip()
+    if not no:
+        return []
+    url = f"{API_BASE}/articles/get-compatible-cars-by-article-number/type-id/{type_id}"
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as cl:
+            r = await cl.get(url, headers=_headers(), params={
+                "articleNo": no,
+                "langId": lang_id,
+                "countryFilterId": country_filter_id,
+            })
+            if r.status_code != 200:
+                logger.warning(f"RapidAPI compatible-cars {no} → {r.status_code}: {r.text[:200]}")
+                return []
+            data = r.json()
+
+            # Response shape: {"countArticles": N, "articles": [{"articleNo":
+            # ..., "compatibleCars": [...]}, ...]}. Multiple "articles"
+            # entries can come back for the same articleNo (different
+            # supplierId/articleId under the same code) — merge + dedup
+            # their compatibleCars lists by vehicleId.
+            if isinstance(data, dict):
+                articles = data.get("articles") or []
+            elif isinstance(data, list):
+                articles = data
+            else:
+                articles = []
+
+            seen_vids = set()
+            merged: List[Dict] = []
+            for art in articles:
+                if not isinstance(art, dict):
+                    continue
+                for car in (art.get("compatibleCars") or []):
+                    vid = car.get("vehicleId")
+                    key = vid if vid is not None else id(car)
+                    if key in seen_vids:
+                        continue
+                    seen_vids.add(key)
+                    merged.append(car)
+            return merged
+    except Exception as e:
+        logger.warning(f"RapidAPI compatible-cars error for {no}: {e}")
         return []
 
 

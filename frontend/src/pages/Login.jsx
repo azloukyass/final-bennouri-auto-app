@@ -63,6 +63,11 @@ export default function Login() {
           />
         </div>
 
+         <div className="mt-2 text-right">
+  <Link to="/mot-de-passe-oublie" className="text-xs text-red-600 hover:underline font-medium" data-testid="login-forgot-password-link">
+    Mot de passe oublié ?
+  </Link>
+</div>
         <button type="submit" disabled={loading} className="mt-6 w-full bn-btn-primary disabled:opacity-60" data-testid="login-submit-button">
           {loading ? "Connexion..." : (<><LogIn className="w-4 h-4" /> Se connecter</>)}
         </button>

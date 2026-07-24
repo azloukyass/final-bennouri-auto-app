@@ -64,13 +64,14 @@ export default function VehicleDetail() {
             <span className="bn-chip bg-white/10 text-white border-white/20"><Calendar className="w-3 h-3" /> {vehicle.year || "—"}</span>
             <span className="bn-chip bg-white/10 text-white border-white/20"><Fuel className="w-3 h-3" /> {vehicle.fuel}</span>
             <span className="bn-chip bg-red-600/30 text-red-200 border-red-500/40 font-mono-vin"><Hash className="w-3 h-3" /> {vehicle.vin}</span>
+            <span className="bn-chip bg-red-600/30 text-red-200 border-red-500/40 font-mono-vin"><Car className="w-3 h-3" />{vehicle.engine}</span>
+
           </div>
 
           <h1 className="font-display text-3xl sm:text-5xl font-bold tracking-tight">
             {vehicle.make} {vehicle.model}
           </h1>
           <p className="text-slate-300 mt-2">
-            {vehicle.engine && vehicle.engine !== "—" ? `Moteur ${vehicle.engine} · ` : ""}
             {vehicle.trim && vehicle.trim !== "—" ? `Finition ${vehicle.trim} · ` : ""}
             Choisissez la famille de pièces ci-dessous
           </p>

@@ -37,7 +37,7 @@ const DELIVERY_OPTIONS = [
 
 const PAYMENT_OPTIONS = [
   { code: "cod", title: "Paiement à la livraison", sub: "Payez à réception", Icon: Wallet },
-  { code: "card", title: "Paiement par carte", sub: "Visa, Mastercard", Icon: CreditCard },
+  { code: "card", title: "Paiement par carte", sub: "Visa, Mastercard", Icon: CreditCard, disabled: true  },
   { code: "transfer", title: "Virement bancaire", sub: "Virement bancaire", Icon: Banknote },
 ];
 
@@ -256,38 +256,52 @@ export default function Checkout() {
             )}
           </div>
 
-          {/* Payment method */}
-          <div className="bg-white border border-slate-200 rounded-sm p-6">
-            <h2 className="font-display font-black text-slate-900 uppercase text-sm tracking-wider mb-4 flex items-center gap-2">
-              <span className="w-1 h-5 bg-red-600 inline-block" /> Mode de paiement
-            </h2>
-            <div className="space-y-3">
-              {PAYMENT_OPTIONS.map((p) => {
-                const selected = paymentCode === p.code;
-                return (
-                  <label
-                    key={p.code}
-                    className={`flex items-center gap-3 border rounded-sm p-3 cursor-pointer transition-all ${selected ? "border-red-600 bg-red-50/40 ring-2 ring-red-600/15" : "border-slate-200 hover:border-slate-400"}`}
-                    data-testid={`payment-opt-${p.code}`}
-                  >
-                    <input
-                      type="radio"
-                      name="payment"
-                      value={p.code}
-                      checked={selected}
-                      onChange={() => setPaymentCode(p.code)}
-                      className="w-4 h-4 accent-red-600"
-                    />
-                    <p.Icon className={`w-5 h-5 ${selected ? "text-red-600" : "text-slate-500"}`} />
-                    <div className="min-w-0">
-                      <div className="font-display font-bold text-sm text-slate-900">{p.title}</div>
-                      <div className="text-xs text-slate-500">{p.sub}</div>
-                    </div>
-                  </label>
-                );
-              })}
+   {/* Payment method */}
+<div className="bg-white border border-slate-200 rounded-sm p-6">
+  <h2 className="font-display font-black text-slate-900 uppercase text-sm tracking-wider mb-4 flex items-center gap-2">
+    <span className="w-1 h-5 bg-red-600 inline-block" /> Mode de paiement
+  </h2>
+  <div className="space-y-3">
+    {PAYMENT_OPTIONS.map((p) => {
+      const selected = paymentCode === p.code;
+      return (
+        <label
+          key={p.code}
+          className={`flex items-center gap-3 border rounded-sm p-3 transition-all ${
+            p.disabled
+              ? "border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed"
+              : selected
+              ? "border-red-600 bg-red-50/40 ring-2 ring-red-600/15 cursor-pointer"
+              : "border-slate-200 hover:border-slate-400 cursor-pointer"
+          }`}
+          data-testid={`payment-opt-${p.code}`}
+        >
+          <input
+            type="radio"
+            name="payment"
+            value={p.code}
+            checked={selected}
+            disabled={p.disabled}
+            onChange={() => !p.disabled && setPaymentCode(p.code)}
+            className="w-4 h-4 accent-red-600 disabled:cursor-not-allowed"
+          />
+          <p.Icon className={`w-5 h-5 ${p.disabled ? "text-slate-400" : selected ? "text-red-600" : "text-slate-500"}`} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className={`font-display font-bold text-sm ${p.disabled ? "text-slate-500" : "text-slate-900"}`}>{p.title}</div>
+              {p.disabled && (
+                <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 px-2 py-0.5 rounded-sm">
+                  Bientôt disponible
+                </span>
+              )}
             </div>
+            <div className="text-xs text-slate-500">{p.sub}</div>
           </div>
+        </label>
+      );
+    })}
+  </div>
+</div>
         </div>
 
         {/* Right: Recap */}

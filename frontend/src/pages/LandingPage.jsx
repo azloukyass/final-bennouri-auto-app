@@ -3,9 +3,6 @@ import { useState } from "react";
 import {
   ArrowRight,
   Search,
-  Truck,
-  Shield,
-  Award,
   Headphones,
   Hash,
   CheckCircle2,
@@ -14,21 +11,34 @@ import { toast } from "sonner";
 import { api, formatApiError } from "@/lib/api";
 import { useCart } from "@/context/CartContext";
 import { BRANDS, logoUrl } from "@/data/brands";
-import { OilBottle, BrakeDisc, CarBattery, OilFilter, Engine, ShockAbsorber } from "@/components/ProductIcons";
 import PartnersSearchModal from "@/components/PartnersSearchModal";
+import Hero from "@/components/HeroSection";
 
 const POPULAR_CATEGORIES = [
-  { slug: "batterie", label: "Batterie", Icon: CarBattery },
-  { slug: "filtre-huile", label: "Filtre Huile", Icon: OilFilter },
-  { slug: "accessoires", label: "Accessoires", Icon: Engine },
-  { slug: "eau-radiateur", label: "Eau Radiateur", Icon: OilBottle },
+  { slug: "batterie", label: "Batterie", image: "/batterie.png" },
+  { slug: "huile-moteur", label: "HUILE MOTEUR", image: "/huile-moteur.png" },
+  { slug: "accessoires", label: "Accessoires", image: "/essuie_glace.png" },
+  { slug: "eau-radiateur", label: "Eau Radiateur", image: "/eau-radiateur.png" },
 ];
 
 const TRUST_BADGES = [
-  { Icon: Truck, title: "Livraison rapide", sub: "Partout en Tunisie" },
-  { Icon: Shield, title: "Produits originaux", sub: "Qualité garantie" },
-  { Icon: Award, title: "Meilleurs prix", sub: "Offres imbattables" },
-  { Icon: Headphones, title: "Support client", sub: "À votre écoute" },
+  { image: "/livraison-rapide.png", title: "Livraison rapide", sub: "Partout en Tunisie" },
+  { image: "/produits-originaux.png", title: "Produits originaux", sub: "Qualité garantie" },
+  { image: "/meilleurs-prixx.png", title: "Meilleurs prix", sub: "Offres imbattables" },
+  { image: "/support-client.jpg", title: "Support client", sub: "À votre écoute" },
+];
+
+const PARTNERS = [
+  { name: "Bosch", logo: "/boesch.png" },
+  { name: "Brembo", logo: "/Brembo.png" },
+  { name: "Shell", logo: "/shell.png" },
+  { name: "Valeo", logo: "/valeo.png" },
+  { name: "Mahle", logo: "/mahle.png" },
+  { name: "Continental", logo: "/Continental.png" },
+  { name: "Castrol", logo: "/Castrol.png" },
+  { name: "Denso", logo: "/Denso.png" },
+  { name: "Monroe", logo: "/monroe.png" },
+  { name: "Delphi", logo: "/Delphi.png" },
 ];
 
 export default function LandingPage() {
@@ -37,40 +47,53 @@ export default function LandingPage() {
   const [vin, setVin] = useState("");
   const [loading, setLoading] = useState(false);
   const [popularCategory, setPopularCategory] = useState(null);
+  const [variantPicker, setVariantPicker] = useState(null);
+  const [showEngineHelp, setShowEngineHelp] = useState(false);
 
   const handleVin = async (e) => {
     e.preventDefault();
     const v = vin.trim().toUpperCase();
+
     if (v.length < 11) {
       toast.error("Le VIN doit contenir au moins 11 caractères");
       return;
     }
+
     setLoading(true);
+
     try {
-      // Try TecDoc first via RapidAPI
+      const { data: td } = await api.get(`/rapidapi/vin/${v}`);
+
       try {
-        const { data: td } = await api.get(`/rapidapi/vin/${v}`);
-        // Build a vehicle object compatible with VehicleDetail
-        const vehicle = {
-          vin: v,
-          make: td.manu_name,
-          model: td.model_name,
-          year: "—",
-          fuel: "—",
-          engine: "—",
-          trim: "—",
-          source: "tecdoc",
-          tecdoc_model_id: td.model_id,
-        };
-        setVehicle(vehicle);
-        navigate(`/vehicule/${v}`);
-        return;
-      } catch (_) {
-        // Fallback to NHTSA / WMI decoder
-        const { data } = await api.post("/vin/decode", { vin: v });
-        setVehicle(data);
-        navigate(`/vehicule/${data.vin}`);
+        const { data: vv } = await api.get(`/vehicles/variants/${td.model_id}`);
+        const vehicles = vv?.vehicles || [];
+
+        if (vehicles.length > 0) {
+          setVariantPicker({
+            vin: v,
+            manuName: td.manu_name,
+            modelName: td.model_name,
+            modelId: td.model_id,
+            vehicles: vehicles,
+          });
+          setLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.error("[VIN] variants FAILED:", err?.response?.data || err.message);
       }
+
+      // fallback direct vehicle
+      setVehicle({
+        vin: v,
+        make: td.manu_name,
+        model: td.model_name,
+        source: "tecdoc",
+        tecdoc_model_id: td.model_id,
+      });
+
+      navigate(`/vehicule/${v}`);
+      return;
     } catch (err) {
       toast.error(formatApiError(err));
     } finally {
@@ -78,139 +101,57 @@ export default function LandingPage() {
     }
   };
 
+  const confirmEngineVariant = (variant) => {
+    if (!variantPicker) return;
+
+    const vehicle = {
+      vin: variantPicker.vin,
+      make: variantPicker.manuName,
+      model: variantPicker.modelName,
+      engine: variant.typeEngineName,
+      vehicle_id: variant.vehicleId,
+      source: "tecdoc",
+      tecdoc_model_id: variantPicker.modelId,
+    };
+
+    setVehicle(vehicle);
+    const vinToUse = variantPicker.vin;
+    setVariantPicker(null);
+    navigate(`/vehicule/${vinToUse}`);
+  };
+
   return (
     <div className="bg-black text-white" data-testid="landing-page">
+      {/* Bienvenue banner — schmaler Streifen über dem Hero */}
+{/* Sale-Badge — oben rechts, dicht am Hero */}
+{/* Sale-Badge — leicht eingerückt von links */}
+<div className="flex items-center pl-10 sm:pl-15 lg:pl-20" data-testid="footer-payment-icons">
+  <img
+    src="sale.png"
+    alt="Paiement sécurisé"
+    className="w-48 h-auto object-contain mb-1"
+    style={{ transform: "rotate(-8deg)" }}
+  />
+</div>
       {/* Hero — full-width banner with real auto parts photo */}
-      <section className="relative overflow-hidden bg-black min-h-[640px] lg:min-h-[680px] flex items-center" data-testid="hero-section">
-        {/* Background image — full bleed, parts on the right, dark fade to the left */}
-        <div className="absolute inset-0 z-0">
-          <img
-            src="https://customer-assets.emergentagent.com/job_mechanic-hub-200/artifacts/5q4klcwe_section%20body_vin%20.jpg"
-            alt="Pièces auto originales"
-            className="absolute inset-0 w-full h-full object-cover object-right"
-            onError={(e) => {
-              e.target.src = "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?auto=format&fit=crop&w=1920&q=80";
-              e.target.onerror = null;
-            }}
-          />
-          {/* Strong left-to-transparent gradient so text is readable */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black via-black/95 to-black/10" />
-          <div className="absolute inset-y-0 left-0 w-1/2 bg-black/60" />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/60" />
-          {/* Red glow accent */}
-          <div className="absolute -right-40 top-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-red-600/15 rounded-full blur-3xl pointer-events-none" />
-        </div>
+      <Hero vin={vin} setVin={setVin} loading={loading} handleVin={handleVin} />
 
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 lg:py-20 w-full">
-          <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.4em] text-red-500 mb-4">
-              <span className="w-6 h-px bg-red-500"></span> Pièces auto en Tunisie
-            </div>
-            <h1 className="font-display text-5xl sm:text-6xl lg:text-7xl xl:text-8xl font-black leading-[0.95] tracking-tight text-white">
-              PIÈCES AUTO<br />
-              <span className="text-red-600">ORIGINALES</span>
-            </h1>
-            <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white font-semibold">
-              <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-red-500" /> Qualité garantie</span>
-              <span className="text-white/40">|</span>
-              <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-red-500" /> Meilleurs prix</span>
-              <span className="text-white/40">|</span>
-              <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-red-500" /> Livraison rapide</span>
-            </div>
 
-            {/* VIN search */}
-            <form onSubmit={handleVin} className="mt-8 max-w-xl" data-testid="hero-vin-form">
-              <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.3em] text-red-500 mb-3">
-                <span className="w-4 h-px bg-red-500"></span>
-                <Hash className="w-3 h-3" />
-                Trouvez vos pièces par VIN
-              </div>
-              <div className="group flex items-stretch bg-white rounded-sm overflow-hidden shadow-2xl shadow-red-900/40 ring-1 ring-white/10 focus-within:ring-2 focus-within:ring-red-500 transition-all">
-                <div className="flex items-center pl-4 pr-2 text-black/30 border-r border-zinc-100">
-                  <Hash className="w-4 h-4" />
-                </div>
-                <input
-                  type="text"
-                  value={vin}
-                  onChange={(e) => setVin(e.target.value.toUpperCase())}
-                  placeholder="VF15R0K0H48649991"
-                  maxLength={17}
-                  className="flex-1 px-3 py-3 text-sm font-mono tracking-wider text-black focus:outline-none placeholder:text-black/25"
-                  data-testid="hero-vin-input"
-                />
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="bg-red-600 hover:bg-red-700 disabled:bg-red-400 px-6 text-white text-xs font-black uppercase tracking-wider transition-colors flex items-center gap-2 group-focus-within:bg-red-700"
-                  data-testid="hero-vin-submit"
-                >
-                  {loading ? (
-                    <>
-                      <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Recherche
-                    </>
-                  ) : (
-                    <>
-                      <Search className="w-4 h-4" />
-                      Rechercher
-                    </>
-                  )}
-                </button>
-              </div>
-              <div className="mt-2 flex items-center justify-between text-[11px]">
-                <span className="text-white/60">17 caractères en général · <span className="text-red-400 font-semibold">{vin.length}/17</span></span>
-              </div>
-            </form>
-          </div>
-        </div>
-      </section>
-
-      {/* Trust badges row — WHITE bg, polished marker badges */}
-      <section className="bg-white text-black" data-testid="trust-badges">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-y-10 gap-x-6">
+      {/* Trust badges row — dark, compact, image + text inline */}
+      <section className="bg-black text-white border-t-2 border-red-600" data-testid="trust-badges">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 divide-y divide-white/10 lg:divide-y-0 lg:divide-x">
             {TRUST_BADGES.map((b, idx) => (
-              <div key={b.title} className="group flex items-center gap-5">
-                {/* Polished marker / leaf badge */}
-                <div className="relative flex-shrink-0 transition-transform duration-300 group-hover:-translate-y-1">
-                  <svg viewBox="0 0 72 88" className="w-16 h-20 sm:w-[72px] sm:h-[88px] drop-shadow-[0_6px_12px_rgba(220,38,38,0.18)]">
-                    <defs>
-                      <linearGradient id={`badge-fill-${idx}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#fff5f5" />
-                        <stop offset="100%" stopColor="#ffe4e6" />
-                      </linearGradient>
-                      <linearGradient id={`badge-stroke-${idx}`} x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0%" stopColor="#ef4444" />
-                        <stop offset="100%" stopColor="#b91c1c" />
-                      </linearGradient>
-                    </defs>
-                    {/* Leaf / marker silhouette with subtle gradient fill */}
-                    <path
-                      d="M36 4 C 50 4, 64 20, 64 42 C 64 62, 50 80, 36 84 C 22 80, 8 62, 8 42 C 8 20, 22 4, 36 4 Z"
-                      fill={`url(#badge-fill-${idx})`}
-                      stroke={`url(#badge-stroke-${idx})`}
-                      strokeWidth="2.5"
-                    />
-                    {/* Inner highlight ring */}
-                    <path
-                      d="M36 12 C 47 12, 58 25, 58 42 C 58 58, 47 74, 36 77 C 25 74, 14 58, 14 42 C 14 25, 25 12, 36 12 Z"
-                      fill="none"
-                      stroke="#fecaca"
-                      strokeWidth="0.8"
-                    />
-                  </svg>
-                  {/* Icon centered above the curved part */}
-                  <div className="absolute inset-0 flex items-center justify-center" style={{ paddingBottom: 8 }}>
-                    <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center shadow-md shadow-red-700/30 transition-transform duration-300 group-hover:scale-110">
-                      <b.Icon className="w-4 h-4 text-white" strokeWidth={2.5} />
-                    </div>
-                  </div>
-                </div>
+              <div
+                key={b.title}
+                className={`flex items-center gap-3 py-4 lg:py-0 ${idx > 0 ? "lg:pl-6" : ""} ${idx < TRUST_BADGES.length - 1 ? "lg:pr-6" : ""}`}
+              >
+<img src={b.image} alt={b.title} className="w-20 h-20 object-contain flex-shrink-0" />
                 <div>
-                  <div className="font-display font-black text-black uppercase text-base sm:text-lg tracking-wide leading-tight">
+                  <div className="font-display font-black text-white uppercase text-xs sm:text-sm tracking-wide leading-tight">
                     {b.title}
                   </div>
-                  <div className="text-sm text-zinc-500 mt-1">{b.sub}</div>
+                  <div className="text-xs text-white/60 mt-0.5">{b.sub}</div>
                 </div>
               </div>
             ))}
@@ -218,9 +159,9 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Catégories populaires — WHITE bg */}
+      {/* Catégories populaires — WHITE bg, full width */}
       <section className="bg-white text-black" data-testid="popular-categories">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div className="w-full px-[70px] py-16">
           <div className="flex items-end justify-between mb-8">
             <div>
               <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-red-600 mb-2">Découvrez nos catégories</div>
@@ -228,9 +169,6 @@ export default function LandingPage() {
                 Catégories populaires
               </h2>
             </div>
-            <Link to="/recherche-vin" className="text-sm font-semibold text-red-600 hover:text-red-700 inline-flex items-center gap-1">
-              Voir toutes les catégories <ArrowRight className="w-4 h-4" />
-            </Link>
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
@@ -243,7 +181,13 @@ export default function LandingPage() {
               >
                 <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-red-600/0 group-hover:bg-red-600/10 rounded-full blur-2xl transition-colors" />
                 <div className="relative w-full h-2/3 flex items-center justify-center">
-                  <c.Icon className="w-full h-full max-w-[100px] group-hover:scale-110 transition-transform" />
+                 <div className="relative w-full h-3/4 flex items-center justify-center">
+  <img
+    src={c.image}
+    alt={c.label}
+    className="max-w-[190px] max-h-full w-full object-contain group-hover:scale-110 transition-transform drop-shadow-md"
+  />
+</div>
                 </div>
                 <div className="relative mt-3 text-center">
                   <div className="font-display font-black text-black text-base uppercase tracking-wide">{c.label}</div>
@@ -255,6 +199,43 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Partners — animated marquee with real logo images */}
+      <section className="bg-slate-50 border-y border-slate-200 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="text-center mb-10">
+            <div className="text-[10px] font-bold uppercase tracking-[0.4em] text-red-600 mb-2">Nos partenaires</div>
+            <h2 className="font-display text-3xl sm:text-4xl font-black uppercase tracking-tight text-slate-900">
+              Les meilleures marques mondiales
+            </h2>
+            <p className="mt-3 text-slate-600 text-sm max-w-2xl mx-auto">
+              Nous travaillons exclusivement avec des équipementiers de renommée internationale pour garantir
+              la fiabilité et la longévité de chaque pièce vendue.
+            </p>
+          </div>
+        </div>
+
+        <div className="relative w-full">
+          <div className="pointer-events-none absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-slate-50 to-transparent z-10" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-16 bg-gradient-to-l from-slate-50 to-transparent z-10" />
+
+          <div className="flex w-max animate-marquee gap-4 py-2">
+            {[...PARTNERS, ...PARTNERS].map((p, idx) => (
+              <div
+                key={`${p.name}-${idx}`}
+                className="bg-white border border-slate-200 rounded-sm py-6 px-8 flex items-center justify-center hover:shadow-md transition-all flex-shrink-0 w-44 h-20"
+                data-testid={`partner-${p.name}`}
+              >
+                <img
+                  src={p.logo}
+                  alt={p.name}
+                  className="max-w-full max-h-10 object-contain"
+                  onError={(e) => { e.target.style.display = "none"; }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* Final CTA strip — RED */}
       <section className="bg-red-600 text-white">
@@ -283,6 +264,101 @@ export default function LandingPage() {
         categorySlug={popularCategory}
         onClose={() => setPopularCategory(null)}
       />
+
+      {/* Engine variant picker */}
+      {variantPicker && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
+          onClick={() => setVariantPicker(null)}
+        >
+          <div
+            className="bg-white text-black rounded-md w-full max-w-md max-h-[80vh] overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-5 border-b border-zinc-200 flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-bold uppercase text-red-600">
+                  {variantPicker.manuName} — {variantPicker.modelName}
+                </div>
+                <h3 className="font-black text-lg uppercase leading-tight">
+                  Choisissez le moteur
+                </h3>
+                <p className="text-xs text-zinc-500 mt-1">
+                  Sélectionnez la motorisation exacte de votre véhicule
+                </p>
+              </div>
+              <button
+                onClick={() => setShowEngineHelp(true)}
+                className="text-[10px] font-bold uppercase bg-zinc-900 text-white px-3 py-2 rounded-sm hover:bg-red-600 transition"
+              >
+                Aide ?
+              </button>
+            </div>
+
+            {showEngineHelp && (
+              <div className="p-4 bg-red-50 border-b border-red-200 text-xs">
+                <div className="font-bold text-red-700 mb-2">
+                  Où trouver le type moteur ?
+                </div>
+                <p className="text-zinc-700 mb-3">
+                  Le <b>type moteur</b> est une information technique importante pour identifier
+                  la bonne pièce pour votre véhicule. Vous pouvez le trouver à plusieurs endroits :
+                </p>
+                <ul className="space-y-2 text-zinc-700">
+                  <li>
+                    📄 <b>Carte grise (Tunisie)</b><br />
+                    → Regardez la section <b>D.2 / Type / Version</b> ou la ligne <b>Motorisation</b>.
+                    Le code moteur peut apparaître sous forme comme : <i>1.5 BlueHDi 100</i> ou <i>PureTech 130</i>.
+                  </li>
+                  <li>
+                    🔧 <b>Bloc moteur (sous le capot)</b><br />
+                    → Le type moteur est souvent <b>gravé directement sur le moteur</b> ou sur une petite plaque métallique.
+                  </li>
+                  <li>
+                    🚗 <b>Étiquette véhicule</b><br />
+                    → Dans l&apos;ouverture de la porte conducteur ou sous le capot, il y a une étiquette constructeur avec le code moteur.
+                  </li>
+                </ul>
+                <button
+                  onClick={() => setShowEngineHelp(false)}
+                  className="mt-3 text-[10px] underline text-red-600"
+                >
+                  fermer
+                </button>
+              </div>
+            )}
+
+            <div className="p-5 space-y-2 overflow-y-auto max-h-[55vh]">
+              <div className="text-[10px] uppercase tracking-widest text-zinc-400 mb-2">
+                moteurs disponibles
+              </div>
+
+              {Array.from(
+                new Map(
+                  variantPicker.vehicles
+                    .filter((v) => v?.vehicleId && v?.typeEngineName)
+                    .map((v) => [v.vehicleId, v])
+                ).values()
+              ).map((v) => (
+                <button
+                  key={v.vehicleId}
+                  onClick={() => confirmEngineVariant(v)}
+                  className="w-full text-left border border-zinc-200 hover:border-red-600 hover:bg-red-50 rounded-sm py-3 px-4 transition group"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="font-semibold text-sm group-hover:text-red-600">
+                      {v.typeEngineName}
+                    </div>
+                    <span className="text-[10px] text-zinc-400">
+                      ID {v.vehicleId}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -27,6 +27,18 @@ export default function ArticleDetail() {
   const [qty, setQty] = useState(1);
   const [imgError, setImgError] = useState(false);
   const [imgZoom, setImgZoom] = useState(false);
+ const [logoError, setLogoError] = useState(false); // NEU
+
+
+ function getInitials(name = "") {
+  return name
+    .trim()
+    .split(/\s+/)
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
 
   useEffect(() => {
     let cancelled = false;
@@ -76,7 +88,11 @@ export default function ArticleDetail() {
 
   const a = data.article;
   const specs = Array.isArray(a.allSpecifications) ? a.allSpecifications : [];
-  const oemList = Array.isArray(a.oemNo) ? a.oemNo : [];
+  const oemList = Array.isArray(a.oemNo)
+  ? [...a.oemNo].sort((x, y) =>
+      (x.oemBrand || "").localeCompare(y.oemBrand || "", "fr", { sensitivity: "base" })
+    )
+  : [];
   const compat = Array.isArray(a.compatibleCars) ? a.compatibleCars : [];
 
   const price = stockItem?.prix_tnd ?? null;
@@ -91,6 +107,7 @@ export default function ArticleDetail() {
     addToCart(
       {
         ref: stockItem.reference,
+        oemRef: ref,  
         name: stockItem.designation || a.articleProductName,
         brand: stockItem.fournisseur || a.supplierName || "",
         image: a.s3image || "",
@@ -158,9 +175,20 @@ export default function ArticleDetail() {
             <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-red-600 mb-2">
               {a.supplierName || "TecDoc"}
             </div>
-            <h1 className="font-display text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 leading-tight tracking-tight uppercase" data-testid="article-title">
-              {a.articleProductName || "—"}
-            </h1>
+            <div className="flex items-start justify-between gap-4">
+    <h1 className="font-display text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 leading-tight tracking-tight uppercase" data-testid="article-title">
+      {a.articleProductName || "—"}
+    </h1>
+    {stockItem ? (
+      <span className="flex-shrink-0 inline-flex items-center gap-1.5 bg-emerald-500 text-white text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-sm shadow-sm" data-testid="article-stock-badge">
+        <BadgeCheck className="w-3.5 h-3.5" /> En stock
+      </span>
+    ) : (
+      <span className="flex-shrink-0 inline-flex items-center gap-1.5 bg-slate-400 text-white text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-sm shadow-sm" data-testid="article-stock-badge">
+        Hors stock
+      </span>
+    )}
+  </div>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
               <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-sm font-mono-vin font-semibold">
                 Réf. {a.articleNo}
@@ -178,6 +206,9 @@ export default function ArticleDetail() {
               })()}
             </div>
 
+          
+
+
             <div className="mt-6 border-t border-slate-100 pt-5 flex-1 flex flex-col justify-end">
               {price ? (
                 <>
@@ -188,7 +219,7 @@ export default function ArticleDetail() {
                         {formatPrice(price)}
                       </div>
                       <div className="text-xs text-slate-500 mt-1">
-                        {stock} disponible{stock > 1 ? "s" : ""} · Livraison 24h-48h
+                        · Livraison 24h-48h
                       </div>
                     </div>
                     <div className="inline-flex items-center border-2 border-slate-300 rounded-sm">
@@ -276,25 +307,41 @@ export default function ArticleDetail() {
             </div>
           )}
 
-          {tab === "oem" && (
-            <div>
-              <h2 className="font-display font-black text-slate-900 uppercase text-lg tracking-wide mb-4 flex items-center gap-2">
-                <span className="w-1 h-5 bg-red-600 inline-block" /> Références constructeur
-              </h2>
-              {oemList.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {oemList.map((o, i) => (
-                    <div key={i} className="border border-slate-200 hover:border-red-500 rounded-sm p-4 transition-colors">
-                      <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-red-600">{o.oemBrand || "—"}</div>
-                      <div className="font-mono-vin font-semibold text-slate-900 text-base mt-1 break-all">{o.oemDisplayNo || "—"}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <EmptyTab text="Aucune référence constructeur." />
-              )}
+       {tab === "oem" && (
+  <div>
+    <h2 className="font-display font-black text-slate-900 uppercase text-lg tracking-wide mb-4 flex items-center gap-2">
+      <span className="w-1 h-5 bg-red-600 inline-block" /> Références constructeur
+    </h2>
+    {oemList.length > 0 ? (
+      Object.entries(
+        oemList.reduce((acc, o) => {
+          const brand = o.oemBrand || "Autre";
+          (acc[brand] ||= []).push(o);
+          return acc;
+        }, {})
+      )
+        .sort(([a], [b]) => a.localeCompare(b, "fr", { sensitivity: "base" }))
+        .map(([brand, items]) => (
+          <div key={brand} className="mb-6 last:mb-0">
+            <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-red-600 mb-2">
+              {brand}
             </div>
-          )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {items.map((o, i) => (
+                <div key={i} className="border border-slate-200 hover:border-red-500 rounded-sm p-4 transition-colors">
+                  <div className="font-mono-vin font-semibold text-slate-900 text-base break-all">
+                    {o.oemDisplayNo || "—"}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))
+    ) : (
+      <EmptyTab text="Aucune référence constructeur." />
+    )}
+  </div>
+)}
 
           {tab === "equivalence" && (
             <div>

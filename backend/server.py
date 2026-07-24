@@ -13,12 +13,13 @@ import httpx
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, BackgroundTasks
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, BackgroundTasks, UploadFile, File
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr
 
-from catalog_data import CATALOG, get_section, get_category, find_part
+from catalog_data import CATALOG, get_section, get_category, find_part, get_label_from_slug
 from vehicles_catalog import get_catalog as get_vehicles_catalog, VEHICLES
 from partsouq_scraper import scrape_vin as partsouq_scrape, scrape_subgroup_parts
 from fadpro_client import (
@@ -27,16 +28,17 @@ from fadpro_client import (
     search_by_designation as fadpro_designation_search,
 )
 from iis_supplier_client import get_copia, get_partspro
-from email_service import send_welcome_email, send_order_confirmation, send_contact_to_admin
+from proad_client import search_reference as proad_search 
+from email_service import send_welcome_email, send_order_confirmation, send_contact_to_admin, send_password_reset_email
 from rapidapi_client import (
     vin_lookup as rapid_vin_lookup,
     search_oem as rapid_search_oem,
     list_vehicles_for_model as rapid_list_vehicles,
     find_article_by_oem as rapid_find_article_by_oem,
     article_complete_details as rapid_article_details,
-    vin_mega_decode as rapid_vin_mega,
-    pick_best_vehicle_id as rapid_pick_vehicle_id,
 )
+import secrets
+
 
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
@@ -69,7 +71,8 @@ def create_access_token(user_id: str, email: str) -> str:
 
 app = FastAPI(title="BENNOURI Pièces Auto API")
 api = APIRouter(prefix="/api")
-
+UPLOAD_DIR = ROOT_DIR / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
 
 class RegisterIn(BaseModel):
     name: str
@@ -82,6 +85,14 @@ class RegisterIn(BaseModel):
 class LoginIn(BaseModel):
     email: EmailStr
     password: str
+
+class ForgotPasswordIn(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordIn(BaseModel):
+    token: str
+    new_password: str
 
 
 class VinIn(BaseModel):
@@ -125,6 +136,18 @@ class ContactIn(BaseModel):
     message: str
 
 
+class ManualPartIn(BaseModel):
+    section: str                 # z.B. "mecanique"
+    category_path: List[str]     # slug-Pfad, z.B. ["moteur", "filtre-huile"]
+    ref: str
+    name: str
+    brand: str = ""
+    price_tnd: float
+    image: str = ""
+    reference_origine: str = ""       
+    compatible_refs: List[str] = []
+    stock: int = 25
+
 async def get_current_user(request: Request) -> dict:
     token = request.cookies.get("access_token")
     if not token:
@@ -132,7 +155,7 @@ async def get_current_user(request: Request) -> dict:
         if auth.startswith("Bearer "):
             token = auth[7:]
     if not token:
-        raise HTTPException(status_code=401, detail="Non authentifié")
+        raise HTTPException(status_code=401, detail="Connectez-vous pour accéder à la recherche de pièces auto.")
     try:
         payload = jwt.decode(token, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
         if payload.get("type") != "access":
@@ -218,6 +241,58 @@ async def logout(response: Response):
     return {"ok": True}
 
 
+RESET_TOKEN_TTL_MINUTES = 30
+
+
+@api.post("/auth/forgot-password")
+async def forgot_password(data: ForgotPasswordIn, background_tasks: BackgroundTasks):
+    email = data.email.lower().strip()
+    user = await db.users.find_one({"email": email})
+    # Bewusst IMMER "ok" zurückgeben, egal ob der Account existiert —
+    # sonst könnten Angreifer per Trial-and-Error herausfinden, welche
+    # Emails registriert sind (User-Enumeration).
+    if not user:
+        return {"ok": True}
+
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=RESET_TOKEN_TTL_MINUTES)
+
+    await db.password_resets.insert_one({
+        "token": token,
+        "user_id": user["id"],
+        "email": email,
+        "expires_at": expires_at,
+        "used": False,
+        "created_at": datetime.now(timezone.utc),
+    })
+
+    background_tasks.add_task(send_password_reset_email, user["name"], email, token)
+    return {"ok": True}
+
+
+@api.post("/auth/reset-password")
+async def reset_password(data: ResetPasswordIn):
+    if len(data.new_password) < 6:
+        raise HTTPException(400, "Le mot de passe doit contenir au moins 6 caractères")
+
+    reset_doc = await db.password_resets.find_one({"token": data.token, "used": False})
+    if not reset_doc:
+        raise HTTPException(400, "Lien de réinitialisation invalide ou déjà utilisé")
+
+    expires_at = reset_doc["expires_at"]
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) > expires_at:
+        raise HTTPException(400, "Ce lien de réinitialisation a expiré. Veuillez en demander un nouveau.")
+
+    await db.users.update_one(
+        {"id": reset_doc["user_id"]},
+        {"$set": {"password_hash": hash_password(data.new_password)}},
+    )
+    await db.password_resets.update_one({"token": data.token}, {"$set": {"used": True}})
+    return {"ok": True}
+
+
 @api.get("/auth/me")
 async def me(user: dict = Depends(get_current_user)):
     return {"user": user_to_dict(user)}
@@ -249,8 +324,7 @@ async def get_section_api(section: str):
             {
                 "slug": c["slug"],
                 "label": c["label"],
-                "icon": c["icon"],
-                "image": c["image"],
+                "image": c.get("image"),
                 "children": c.get("children", []),
                 "sub_items": [child["label"] for child in c.get("children", [])],
                 "count": len(c.get("parts", [])),
@@ -258,7 +332,6 @@ async def get_section_api(section: str):
             for c in data["categories"]
         ],
     }
-
 
 @api.get("/catalog-tree/{section}/{path:path}")
 async def get_catalog_node(section: str, path: str):
@@ -299,14 +372,17 @@ async def get_catalog_node(section: str, path: str):
             "search_keyword": c.get("search_keyword"),
             "split_keywords": bool(c.get("split_keywords")),
         }
-
+    
+    manual_items = await db.manual_parts.find(
+        {"section": section, "category_path": slugs}, {"_id": 0}
+        ).to_list(200)
     return {
         "section": section,
         "slug": node["slug"],
         "label": node["label"],
         "image": node.get("image"),
         "children": [_ser_child(c) for c in (node.get("children") or [])],
-        "parts": node.get("parts", []),
+        "parts": node.get("parts", []) + manual_items,
         "breadcrumb": breadcrumb,
         "search_keyword": node.get("search_keyword"),
         "split_keywords": bool(node.get("split_keywords")),
@@ -370,6 +446,24 @@ def _translate_fuel(fuel: str) -> str:
     return fuel or "Essence"
 
 
+def _fuel_category_from_engine(engine_name: str) -> str:
+    """Categorize a TecDoc `typeEngineName` into a fuel-type bucket, used to
+    group vehicle variants for the manual engine-picker dropdown (replaces
+    the unreliable vin-decoder-mega auto-matching)."""
+    e = (engine_name or "").upper()
+    if "LPG" in e or "GPL" in e:
+        return "GPL"
+    if any(k in e for k in ["EV", "E-TECH", "EQ", "E-208", "E-2008", "ZOE", "IONIQ EV"]):
+        return "Électrique"
+    if any(k in e for k in ["HYBRID", "HEV", "PHEV", "E-POWER", "HYBRIDE"]):
+        return "Hybride"
+    if any(k in e for k in [
+        "CRDI", "TDI", "HDI", "DCI", "CDI", "D4D", "DTI", "JTD",
+        "BLUEHDI", "MULTIJET", "DIESEL", "DTP", "DDIS",
+    ]):
+        return "Diesel"
+    return "Essence"
+
 import asyncio
 import re as _re
 
@@ -383,8 +477,6 @@ def _strip_accents(s: str) -> str:
     return "".join(c for c in n if not unicodedata.combining(c)).lower()
 
 
-# Word characters used to break the supplier designation into tokens. ≥3
-# alphanumerics so short stopwords ("de", "à") are dropped without a list.
 _DESIG_TOKEN_RE = _re.compile(r"[a-z0-9]{3,}")
 
 
@@ -415,6 +507,36 @@ def _designation_has_all_tokens(desig: str, toks: List[str]) -> bool:
         return True
     norm = _strip_accents(desig)
     return all(t in norm for t in toks)
+
+def _designation_has_any_token(desig: str, toks: List[str]) -> bool:
+    """True iff AT LEAST ONE label-word appears as substring in the
+    accent-stripped lowercased designation. Nur relevant für den Fallback
+    bei leerer `categorie`."""
+    if not toks:
+        return True
+    norm = _strip_accents(desig)
+    return any(t in norm for t in toks)    
+
+def _vehicle_compat_matches(compat_list: list, manufacturer_name: str, engine_name: str) -> bool:
+    """True iff at least one entry in `compat_list` (from
+    get_compatible_cars_by_article_number) matches BOTH the manufacturer
+    name (loose substring, accent/case-insensitive) and the engine name
+    (every significant engine token from the searched vehicle must appear
+    in the compatible entry's typeEngineName)."""
+    if not compat_list:
+        return False
+    manu_norm = _strip_accents(manufacturer_name or "")
+    engine_toks = _designation_query_tokens(engine_name or "")
+    if not manu_norm and not engine_toks:
+        return False
+    for entry in compat_list:
+        entry_manu = _strip_accents(entry.get("manufacturerName") or "")
+        entry_engine = entry.get("typeEngineName") or ""
+        manu_ok = (not manu_norm) or (manu_norm in entry_manu or entry_manu in manu_norm)
+        engine_ok = (not engine_toks) or _designation_has_all_tokens(entry_engine, engine_toks)
+        if manu_ok and engine_ok:
+            return True
+    return False
 
 
 def _category_matches(category_str: str, requirement) -> bool:
@@ -451,6 +573,14 @@ def _category_matches(category_str: str, requirement) -> bool:
 # subset of the search query wins. Always place more-specific rules
 # (longer `query_tokens`) ABOVE generic ones to avoid shadowing.
 SUBCATEGORY_CATEGORY_FILTERS: List[dict] = [
+    # ── 4-token rules ────────────────────────────────────────────────
+    {"query_tokens": ["kit", "reparation", "coupelle", "suspension"],
+     "required_category_tokens": ["suspension", "amortisseur", "avant"]},
+      {"query_tokens": ["kit", "plaquettes", "frein", "disque"],
+     "required_category_tokens": [
+         ["freinage", "frein", "arriere", "plaquette"],
+         ["freinage", "frein", "avant", "plaquette"],
+     ]},
     # ── 3-token rules ────────────────────────────────────────────────
     {"query_tokens": ["kit", "chaine", "distribution"],
      "required_category_tokens": ["moteur", "distribution", "composants"]},
@@ -471,8 +601,10 @@ SUBCATEGORY_CATEGORY_FILTERS: List[dict] = [
      "required_category_tokens": ["refroidissement", "moteur", "pompe", "eau"]},
     {"query_tokens": ["radiateur", "eau"],
      "required_category_tokens": ["refroidissement", "moteur", "radiateur", "eau"]},
+    {"query_tokens": ["systeme", "chauffage"],
+     "required_category_tokens": ["electrique", "chauffage", "climatisation", "radiateur"]},
     {"query_tokens": ["radiateur", "chauffage"],
-     "required_category_tokens": ["electrique", "chauffage", "radiateur"]},
+     "required_category_tokens": ["electrique", "chauffage", "climatisation", "radiateur"]},
     {"query_tokens": ["joint", "culasse"],
      "required_category_tokens": ["moteur", "culasse", "joint"]},
     {"query_tokens": ["filtre", "huile"],
@@ -488,17 +620,43 @@ SUBCATEGORY_CATEGORY_FILTERS: List[dict] = [
      "required_category_tokens": ["embrayage", "butee"]},
     {"query_tokens": ["volant", "moteur"],
      "required_category_tokens": ["embrayage", "volant", "moteur"]},
+      {"query_tokens": ["kit", "embrayage"],
+     "required_category_tokens": ["embrayage", "boite", "vitesse"]},
+        {"query_tokens": ["support", "moteur"],
+     "required_category_tokens": ["moteur", "support", "fixation"]},
     {"query_tokens": ["cable", "vitesse"],
      "required_category_tokens": ["commande", "vitesse", "cable"]},
+     {"query_tokens": ["disque", "frein"],
+     "required_category_tokens": [
+         ["freinage", "frein", "avant", "disque"],
+         ["freinage", "frein", "arriere", "disque"],
+     ]},
+    {"query_tokens": ["etrier", "frein"],
+     "required_category_tokens": [
+         ["freinage", "frein", "arriere", "etrier"],
+         ["freinage", "frein", "avant", "etrier"],
+     ]},
+    {"query_tokens": ["cylindre", "roue"],
+     "required_category_tokens": ["freinage", "frein", "arriere", "cylindre", "roue"]},
     {"query_tokens": ["rotule", "suspension"],
      "required_category_tokens": ["suspension", "essieu", "avant", "triangle"]},
+         {"query_tokens": ["suspension", "bras", "liaison"],
+     "required_category_tokens": [
+         ["suspension", "essieu", "arriere"],
+         ["suspension", "essieu", "avant", "triangle"],
+     ]},
+      {"query_tokens": ["jeu", "bras", "suspension", "roue"],
+     "required_category_tokens": [
+         ["suspension", "essieu", "arriere"],
+         ["suspension", "essieu", "avant", "triangle"],
+     ]},
     {"query_tokens": ["moyeu", "roue"],
      "required_category_tokens": ["suspension", "essieu", "avant", "moyeu", "roue"]},
     {"query_tokens": ["toc", "amortisseur"],
      "required_category_tokens": ["suspension", "amortisseur", "toc"]},
     # ── 1-token rules (placed LAST so longer rules win first) ────────
-    {"query_tokens": ["turbo"],
-     "required_category_tokens": ["moteur", "echappement", "suralimentation", "turbo"]},
+    {"query_tokens": ["turbocompresseur"],
+     "required_category_tokens": ["moteur", "echappement", "suralimentation", "turbo", "turbine"]},
     {"query_tokens": ["ventilateur"],
      "required_category_tokens": ["refroidissement", "moteur", "ventilateur"]},
     {"query_tokens": ["injecteur"],
@@ -521,6 +679,42 @@ SUBCATEGORY_CATEGORY_FILTERS: List[dict] = [
          ["suspension", "essieu", "arriere", "train", "silenbloc"],
          ["suspension", "essieu", "avant", "triangle", "silenbloc"],
      ]},
+
+      # ── Carrosserie ──────────────────────────────────────────────────
+    {"query_tokens": ["aile", "avant"],
+     "required_category_tokens": ["carrosserie", "partie", "avant", "aile"]},
+
+    {"query_tokens": ["grille", "centrale"],
+     "required_category_tokens": ["carrosserie", "partie", "avant", "pare-choc", "grille"]},
+    {"query_tokens": ["grille", "pare-choc"],          # variante spelling
+     "required_category_tokens": ["carrosserie", "partie", "avant", "pare-choc", "grille"]},
+
+    {"query_tokens": ["cache", "moteur"],
+     "required_category_tokens": ["carrosserie", "partie", "avant", "pare-choc", "cache", "moteur"]},
+
+    {"query_tokens": ["retroviseur"],
+     "required_category_tokens": ["carrosserie", "porte", "accessoires", "retroviseur"]},
+
+     {"query_tokens": ["pare", "choc"],
+     "required_category_tokens": [["carrosserie", "partie", "arriere", "pare-choc"], ["carrosserie", "partie", "avant", "pare-choc"]]},
+
+      {"query_tokens": ["capot", "moteur"],
+     "required_category_tokens": [["carrosserie", "partie", "avant", "capot", "moteur"]]},
+
+     {"query_tokens": ["revetement", "avant"],
+     "required_category_tokens": ["carrosserie", "partie", "avant", "plage"]},
+
+    # ── Éclairage / Électrique ────────────────────────────────────────
+    {"query_tokens": ["feu", "position"],
+     "required_category_tokens": ["electrique", "eclairage", "signalisation", "phare"]},
+
+    {"query_tokens": ["batterie"],
+     "required_category_tokens": ["electrique", "demarreur", "batterie"]},
+
+    {"query_tokens": ["bouton", "lave", "vitre"],
+     "required_category_tokens": ["electrique", "interrupteur", "leve", "vitre"]},
+    {"query_tokens": ["leve", "vitre"],                # variante courte
+     "required_category_tokens": ["electrique", "interrupteur", "leve", "vitre"]},
     # ── To add a NEW sub-category: copy any block above and edit. ────
 ]
 
@@ -830,6 +1024,93 @@ async def rapidapi_vin(vin: str):
     await db.tecdoc_vehicles.update_one({"vin": vin}, {"$set": doc}, upsert=True)
     return {**info, "source": "fresh"}
 
+@api.get("/vehicles/variants/{model_id}")
+async def vehicle_variants(model_id: int, lang_id: int = 6):
+    """List all TecDoc vehicle-id variants for a modelId, grouped by fuel
+    type (Essence / Diesel / Hybride / GPL / Électrique). Always queries
+    TecDoc in French (lang_id=6). Used by the frontend to let the user
+    manually pick their exact engine."""
+    vehicles = await rapid_list_vehicles(model_id, 6)
+    return {
+        "model_id": model_id,
+        "vehicles": vehicles,
+        "debug": {
+            "count": len(vehicles),
+        }
+    }    
+    if not vehicles:
+        raise HTTPException(404, f"Aucune variante trouvée pour modelId={model_id} (lang_id=6)")
+
+    grouped: dict = {}
+    for v in vehicles:
+        vid = v.get("vehicleId")
+        if not vid:
+            continue
+        engine = v.get("typeEngineName") or "—"
+        fuel = _fuel_category_from_engine(engine)
+        grouped.setdefault(fuel, []).append({
+            "vehicle_id": vid,
+            "engine_name": engine,
+            "manufacturer_name": v.get("manufacturerName") or "",
+            "model_name": v.get("modelName") or "",
+        })
+
+    # Deduplicate identical engine_name entries within the same fuel group
+    # (TecDoc sometimes lists the same engine twice under different
+    # vehicleIds for minor trim/body variants).
+    for fuel, variants in grouped.items():
+        seen = set()
+        deduped = []
+        for it in variants:
+            key = it["engine_name"]
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(it)
+        grouped[fuel] = deduped
+
+    order = ["Essence", "Diesel", "Hybride", "GPL", "Électrique"]
+    fuels = [f for f in order if f in grouped] + [f for f in grouped if f not in order]
+
+    return {
+        "model_id": model_id,
+        "fuels": [{"fuel": f, "variants": grouped[f]} for f in fuels],
+    }
+
+
+@api.get("/debug/rapidapi-vehicles/{model_id}")
+async def debug_rapidapi_vehicles(model_id: int, lang_id: int = 6, country_filter_id: int = 63):
+    """Temporary debug endpoint: calls RapidAPI list-vehicles-id directly
+    and returns the raw status + body, so we can diagnose from the browser
+    without server log access. Remove once the issue is fixed."""
+    import httpx as _httpx
+    from rapidapi_client import API_BASE, TYPE_ID, _headers, _api_key
+
+    url = (
+        f"{API_BASE}/types/type-id/{TYPE_ID}/list-vehicles-id/{model_id}"
+        f"/lang-id/{lang_id}/country-filter-id/{country_filter_id}"
+    )
+    key_tail = "MISSING"
+    try:
+        key_tail = _api_key()[-6:]
+    except Exception as e:
+        key_tail = f"ERROR: {e}"
+
+    try:
+        async with _httpx.AsyncClient(timeout=30.0) as cl:
+            r = await cl.get(url, headers=_headers())
+            return {
+                "url": url,
+                "key_tail": key_tail,
+                "status_code": r.status_code,
+                "body": r.text[:2000],
+            }
+    except Exception as e:
+        return {
+            "url": url,
+            "key_tail": key_tail,
+            "exception": str(e),
+        }    
 
 @api.get("/rapidapi/article-info")
 async def rapidapi_article_info(ref: str, lang_id: int = 6, country_filter_id: int = 63):
@@ -892,6 +1173,41 @@ async def rapidapi_oem_search(model_id: int, q: str, lang_id: int = 6):
     await db.tecdoc_oem_cache.update_one(cache_key, {"$set": doc}, upsert=True)
     return {**doc, "source": "fresh"}
 
+@api.get("/rapidapi/oem-search/artikel-no/{oem}")
+async def rapidapi_oem_search_artikel(oem: str, lang_id: int = 6):
+    from rapidapi_client import search_by_article_oem_no as rapid_search_by_oem_no
+    items = await rapid_search_by_oem_no(oem, lang_id)
+    return {
+        "oem": oem,
+        "lang_id": lang_id,
+        "count": len(items),
+        "items": items,
+        "cached_at": datetime.now(timezone.utc).isoformat(),
+        "source": "fresh",
+    }
+
+@api.get("/rapidapi/compatible-cars/{article_no}")
+async def rapidapi_compatible_cars_endpoint(
+    article_no: str,
+    type_id: int = 1,
+    lang_id: int = 6,
+    country_filter_id: int = 63,
+):
+    """Step 2 for frontend-driven compatibility check: given an articleNo
+    (from /rapidapi/oem-search/artikel-no/{oem}), return the list of
+    vehicles compatible with that article — each entry carries at least
+    {manufacturerName, typeEngineName, modelName, vehicleId}."""
+    from rapidapi_client import get_compatible_cars_by_article_number as rapid_compatible_cars
+    compat = await rapid_compatible_cars(
+        article_no, type_id=type_id, lang_id=lang_id, country_filter_id=country_filter_id,
+    )
+    return {
+        "article_no": article_no,
+        "count": len(compat),
+        "items": compat,
+        "cached_at": datetime.now(timezone.utc).isoformat(),
+        "source": "fresh",
+    }    
 
 POPULAR_CATEGORIES = {
     "batterie": {
@@ -902,33 +1218,36 @@ POPULAR_CATEGORIES = {
         "niv1": "ELECTRIQUE",
         "niv2": "DEMARREUR / COMPOSANTS",
         "niv3": "BATTERIE",
+        "niv4": "BATTERIE",
         # Drop ancillary parts (supports, covers) — only show actual batteries.
         # Includes the "supp" abbreviation used by some suppliers (e.g. "SUPP BATTERIE").
-        "exclude_terms": ["support", "supp ", "cache"],
+        "exclude_terms": ["support", "supp ", "cache", "console"],
     },
-    "filtre-huile": {
-        "label": "Filtre Huile",
+    "huile-moteur": {
+        "label": "HUILE MOTEUR",
         "icon": "Droplet",
         "image": "https://images.unsplash.com/photo-1635775017492-1eb935a082a2?auto=format&fit=crop&w=600&q=70",
         # Combined sources: niv hierarchy + multiple designation searches.
         # Results are merged + deduped by reference.
-        "niv1": "FILTRATION",
-        "niv2": "FILTRE HUILE",
-        "niv3": "FILTRES",
-        "mode": "multi",
-        "designations": [
-            "HUILE MOTEUR",
-            "FILTRE HUILE BOITE VITESSE",
-            "HUILE FREIN",
-            "LAVE GLACE",
-        ],
+        "mode": "niv",
+        "niv1": "LUBRIFICATION MOTEUR",
+        "niv2": "LUBRIFIANTS",
+        "niv3": "HUILE",
+        "niv4": "HUILE MOTEUR"
     },
     "accessoires": {
         "label": "Accessoires",
         "icon": "Package",
         "image": "https://images.unsplash.com/photo-1486006920555-c77dcf18193c?auto=format&fit=crop&w=600&q=70",
-        "mode": "designation",
-        "designation": "ACCESSOIRE",
+        "niv1": "ENTRETIEN",
+        "niv2": "LAVAGE / ESSUYAGE",
+        "niv3": "LAVAGE",
+        "mode": "multi",
+        "designations": [
+            "BALAI ESSUIE-GLACE",
+            "VASE EAU ESSUIE-GLACE",
+            "POMPE LAVE VITRE",
+        ],
     },
     "eau-radiateur": {
         "label": "Eau Radiateur",
@@ -975,14 +1294,53 @@ async def partners_category_products(
         title = (it.get("designation") or it.get("name") or "").lower()
         return not any(term in title for term in exclude_terms)
 
+    def _fallback_label_match(item: dict, slug: str) -> bool:
+        label = get_label_from_slug(slug)
+        if not label:
+            return False
+
+        designation = (
+            item.get("designation")
+            or item.get("name")
+            or ""
+        )
+
+        label_tokens = _designation_query_tokens(label)
+        designation_norm = _strip_accents(designation)
+
+        return all(t in designation_norm for t in label_tokens)    
+
     def _process_source(raw_batch, source_label):
         """Keep only IN-STOCK priced items, apply exclude_terms, sort, cap to PER_SOURCE_CAP."""
         batch = [
             it for it in (raw_batch or [])
-            if it.get("in_stock") and it.get("prix_tnd") and it["prix_tnd"] > 0
+            if it.get("prix_tnd") and it["prix_tnd"] > 0
         ]
-        batch = [it for it in batch if _keep(it)]
-        batch.sort(key=lambda x: x.get("prix_tnd") or 1e9)
+        filtered = []
+        label = (cfg.get("label") or "").lower()
+        for it in batch:
+            cat = (it.get("categorie") or "").strip()
+
+            designation = (
+                it.get("designation")
+                or it.get("name")
+                or it.get("title")
+                or ""
+            ).lower()
+
+            # 1. normal case: categorie exists
+            if cat:
+                if _keep(it):
+                    filtered.append(it)
+                continue
+
+            # 2. fallback case: categorie is empty → check designation
+            if label in designation:
+                if _keep(it):
+                    filtered.append(it)
+
+        batch = filtered
+        batch.sort(key=lambda x: (0 if x.get("in_stock") else 1, x.get("prix_tnd") or 1e9))
         capped = batch[:PER_SOURCE_CAP]
         logging.info(f"FadPro source '{source_label}' → {len(raw_batch or [])} raw, {len(batch)} in-stock filtered, {len(capped)} kept")
         return capped
@@ -1069,11 +1427,12 @@ async def partners_reference_search(ref: str = "", user: dict = Depends(get_curr
         safe_call(fadpro_search(ref), "fadpro"),
         safe_call(get_copia().search_reference(ref), "copia"),
         safe_call(get_partspro().search_reference(ref), "partspro"),
+        safe_call(proad_search(ref), "proad"), 
     )
 
     aggregated = []
     seen = set()
-    for source, items in (fp, co, pp):
+    for source, items in (fp, co, pp, pa):
         for it in items:
             key = (source, (it.get("reference") or "").upper())
             if key in seen:
@@ -1107,9 +1466,14 @@ async def oem_stock_search(
     limit: int = 5,
     split: bool = False,
     vehicle_name: str = "",
+    manufacturer_name: str = "",
+    engine_name: str = "",
     vin: str = "",
+    slug: str = "",
+    vehicle_id: int = 0,
     user: dict = Depends(get_current_user),
 ):
+
     """Combined OEM + multi-supplier lookup.
 
     Workflow:
@@ -1131,60 +1495,44 @@ async def oem_stock_search(
          "Hors stock" on the card).
     """
     import asyncio
-    from piecesautos_compat import (
-        fetch_compatibility as pa_fetch,
-        vehicle_tokens as pa_tokens,
-        title_matches_vehicle as pa_title_match,
-        compat_list_matches_vehicle as pa_compat_match,
+    from rapidapi_client import (
+        search_by_article_oem_no as rapid_search_by_oem_no,
+        get_compatible_cars_by_article_number as rapid_compatible_cars,
     )
 
     query = (q or "").strip()
     if len(query) < 2:
         raise HTTPException(400, "Recherche trop courte (min. 2 caractères)")
 
-    # 0. Resolve modelId → vehicleId (TecDoc requires the concrete vehicle variant)
-    # When `vin` is provided we use the vin-decoder-mega API to get the
-    # `sra_commercial` engine descriptor (e.g. "1.6 HDI 75 (...)") and pick
-    # the TecDoc variant whose `typeEngineName` matches token-for-token (with
-    # BlueHDi/HDi normalisation). Without a VIN, we fall back to the first
-    # variant returned by TecDoc.
-    veh_cache_key = {"model_id": model_id, "lang_id": lang_id, "vin": (vin or "").strip().upper() or None}
-    veh_cached = await db.tecdoc_vehicle_cache.find_one(veh_cache_key, {"_id": 0, "cached_at": 0})
-    if veh_cached and veh_cached.get("vehicle_id"):
-        vehicle_id = veh_cached["vehicle_id"]
-    else:
-        vehicles = await rapid_list_vehicles(model_id, lang_id)
-        if not vehicles:
-            raise HTTPException(404, f"Aucune variante véhicule trouvée pour modelId={model_id}")
-
-        vehicle_id = None
-        if vin and len(vin) == 17:
-            # Get sra_commercial from vin-decoder-mega and pick the matching variant
-            mega = await rapid_vin_mega(vin)
-            sra = (mega or {}).get("sra_commercial") or ""
-            if sra:
-                matched = rapid_pick_vehicle_id(vehicles, sra)
-                if matched:
-                    vehicle_id = matched
-                    logging.info(f"VIN {vin}: matched vehicle_id={vehicle_id} via sra='{sra}'")
-                else:
-                    logging.info(f"VIN {vin}: no engine match for sra='{sra}' — using first variant")
-
-        if not vehicle_id:
+    # 0. Resolve the concrete TecDoc vehicleId.
+    # PRIORITY: an explicit `vehicle_id` sent by the frontend — the user
+    # manually picked their exact engine from the /vehicles/variants
+    # dropdown (fuel type → typeEngineName). This replaces the old
+    # vin-decoder-mega auto-matching, whose sra_commercial/engine data was
+    # frequently wrong and silently picked the wrong variant.
+    if not vehicle_id:
+        veh_cache_key = {"model_id": model_id, "lang_id": lang_id}
+        veh_cached = await db.tecdoc_vehicle_cache.find_one(veh_cache_key, {"_id": 0, "cached_at": 0})
+        if veh_cached and veh_cached.get("vehicle_id"):
+            vehicle_id = veh_cached["vehicle_id"]
+        else:
+            vehicles = await rapid_list_vehicles(model_id, lang_id)
+            if not vehicles:
+                raise HTTPException(404, f"Aucune variante véhicule trouvée pour modelId={model_id}")
             vehicle_id = vehicles[0].get("vehicleId")
-        if not vehicle_id:
-            raise HTTPException(502, "Réponse TecDoc invalide (vehicleId manquant)")
-        await db.tecdoc_vehicle_cache.update_one(
-            veh_cache_key,
-            {"$set": {
-                **veh_cache_key,
-                "vehicle_id": vehicle_id,
-                "variants": [v.get("vehicleId") for v in vehicles if v.get("vehicleId")],
-                "cached_at": datetime.now(timezone.utc).isoformat(),
-            }},
-            upsert=True,
-        )
-
+            if not vehicle_id:
+                raise HTTPException(502, "Réponse TecDoc invalide (vehicleId manquant)")
+            await db.tecdoc_vehicle_cache.update_one(
+                veh_cache_key,
+                {"$set": {
+                    **veh_cache_key,
+                    "vehicle_id": vehicle_id,
+                    "variants": [v.get("vehicleId") for v in vehicles if v.get("vehicleId")],
+                    "cached_at": datetime.now(timezone.utc).isoformat(),
+                }},
+                upsert=True,
+            )
+    
     # 1. OEM refs from TecDoc.
     # Default (split=False, phrase mode): the query is sent AS-IS as a single
     # search-param. This is what TecDoc expects for product-name searches like
@@ -1393,63 +1741,63 @@ async def oem_stock_search(
     # Items whose supplier title contains the model token (cheap path) are
     # kept directly; the others are double-checked against the scraped
     # compatibility list (cached 7 days in Mongo).
-    vn = (vehicle_name or "").strip()
-    if vn:
-        # Split into manu + model: first word = manu, rest = model
-        # e.g. "RENAULT CLIO IV (BH_)" → manu="RENAULT", model="CLIO IV (BH_)"
-        bits = vn.split(maxsplit=1)
-        if len(bits) == 2:
-            manu_norm, model_toks = pa_tokens(bits[0], bits[1])
-        else:
-            manu_norm, model_toks = pa_tokens("", vn)
-    else:
-        manu_norm, model_toks = "", []
+    manu_name_in = (manufacturer_name or "").strip()
+    engine_name_in = (engine_name or "").strip()
+    compat_check_enabled = bool(manu_name_in and engine_name_in)
 
-    pa_sem = asyncio.Semaphore(10)
-    COMPAT_TTL = 7 * 24 * 3600  # 7 days
-    # Cap piecesautos.tn compatibility scraping the same way Copia/PartsPro
-    # are capped — many ReadTimeouts at 5-10 s each easily exhaust the 45 s
-    # endpoint budget when 600+ refs need compat checks.
-    PA_COMPAT_CAP = 50
+    rapid_compat_sem = asyncio.Semaphore(10)
+    RAPID_COMPAT_TTL_S = 7 * 24 * 3600  # 7 days
+    # Cap live RapidAPI compat lookups the same way Copia/PartsPro were
+    # capped — each check costs 2 RapidAPI calls, so we bound how many
+    # candidates get a live check when hundreds of refs are in play.
+    RAPID_COMPAT_CAP = 50
 
-    async def get_compat_list(ref: str, allow_fetch: bool = True):
-        """Cached piecesautos.tn compatibility fetch (per OEM ref).
-
-        - If `model_toks` is empty, returns None (compat filter disabled).
-        - Always reads the warm cache for free.
-        - When `allow_fetch=False` (idx past PA_COMPAT_CAP), returns None
-          on a cache miss so the caller skips the compat filter and keeps
-          the picked items.
-        - When fetching, the live scrape is wrapped in `asyncio.wait_for`
-          with a 2 s budget so a single slow ReadTimeout no longer
-          compounds into the global timeout.
-        """
-        if not model_toks:
+    async def get_rapid_compat_list(ref: str, allow_fetch: bool = True):
+        """Cached two-step RapidAPI compatibility fetch for OEM ref `ref`:
+        1) search-by-article-oem-no → articleNo
+        2) get-compatible-cars-by-article-number → list of compatible
+           vehicles {manufacturerName, typeEngineName, ...}
+        Cached 7 days in Mongo, keyed by ref."""
+        if not compat_check_enabled:
             return None  # filter disabled
-        cached = await db.piecesautos_compat_cache.find_one(
+        cached = await db.rapid_compat_cache.find_one(
             {"ref": ref}, {"_id": 0, "compat": 1, "fetched_at": 1}
         )
-        if cached and cached.get("compat") is not None:
-            return cached["compat"]
+        if cached and cached.get("fetched_at"):
+            try:
+                ts = datetime.fromisoformat(cached["fetched_at"].replace("Z", ""))
+                age = (datetime.now(timezone.utc).replace(tzinfo=None) - ts).total_seconds()
+                if age < RAPID_COMPAT_TTL_S:
+                    return cached.get("compat")
+            except Exception:
+                pass
         if not allow_fetch:
             return None  # cap exceeded — let caller keep the picked items
         try:
-            async with pa_sem:
-                compat = await asyncio.wait_for(pa_fetch(ref), timeout=2.0)
-        except asyncio.TimeoutError:
-            compat = None  # treat as "couldn't check" → keep items
-        except Exception:
-            compat = None
-        if compat is not None:
-            await db.piecesautos_compat_cache.update_one(
-                {"ref": ref},
-                {"$set": {
-                    "ref": ref,
-                    "compat": compat,
-                    "fetched_at": datetime.now(timezone.utc).isoformat(),
-                }},
-                upsert=True,
-            )
+            async with rapid_compat_sem:
+                matches = await asyncio.wait_for(rapid_search_by_oem_no(ref, lang_id=6), timeout=8.0)
+                article_no = None
+                if matches:
+                    article_no = matches[0].get("articleNo") or matches[0].get("articleNumber")
+                if not article_no:
+                    compat = []
+                else:
+                    compat = await asyncio.wait_for(
+                        rapid_compatible_cars(article_no, type_id=1, lang_id=6, country_filter_id=63),
+                        timeout=8.0,
+                    )
+        except Exception as e:
+            logging.warning(f"RapidAPI compat lookup failed for ref={ref}: {e}")
+            return None  # couldn't verify → caller keeps the item
+        await db.rapid_compat_cache.update_one(
+            {"ref": ref},
+            {"$set": {
+                "ref": ref,
+                "compat": compat,
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+            }},
+            upsert=True,
+        )
         return compat
 
     async def lookup(c, idx: int):
@@ -1466,16 +1814,19 @@ async def oem_stock_search(
             if check_locked:
                 tasks.append(cached_supplier_search("copia",    c["ref"], lambda r: get_copia().search_reference(r)))
                 tasks.append(cached_supplier_search("partspro", c["ref"], lambda r: get_partspro().search_reference(r)))
+                tasks.append(cached_supplier_search("proad",    c["ref"], proad_search))
             gathered = await asyncio.gather(*tasks, return_exceptions=True)
             fp = gathered[0]
             co = gathered[1] if check_locked else []
             pp = gathered[2] if check_locked else []
+            pa = gathered[3] if check_locked else []
             # Normalise exceptions to empty lists
             fp = fp if isinstance(fp, list) else []
             co = co if isinstance(co, list) else []
             pp = pp if isinstance(pp, list) else []
+            pa = pa if isinstance(pa, list) else [] 
             picked = []
-            for batch, source in ((fp, "fadpro"), (co, "copia"), (pp, "partspro")):
+            for batch, source in ((fp, "fadpro"), (co, "copia"), (pp, "partspro"), (pa, "proad")):
                 if isinstance(batch, Exception):
                     logging.warning(f"{source} lookup error for {c['ref']}: {batch}")
                     continue
@@ -1507,18 +1858,18 @@ async def oem_stock_search(
             # kept immediately. The rest are checked against piecesautos.tn —
             # but only for the first PA_COMPAT_CAP candidates (compat scrape
             # is slow; past the cap we trust the supplier match).
-            if model_toks and picked:
-                # Cheap-path first: any item that already mentions the model
-                cheap_pass = [it for it in picked if pa_title_match(it.get("designation") or "", model_toks)]
-                if cheap_pass:
-                    return cheap_pass
-                # Slow-path: scrape compatibility list (cached; bounded by cap)
-                compat = await get_compat_list(c["ref"], allow_fetch=idx < PA_COMPAT_CAP)
+            if compat_check_enabled and picked:
+                compat = await get_rapid_compat_list(c["ref"], allow_fetch=idx < RAPID_COMPAT_CAP)
                 if compat is None:
-                    return picked  # filter disabled or cap exceeded → keep
-                if not compat or pa_compat_match(compat, manu_norm, model_toks):
+                    return picked  # couldn't verify (disabled/timeout/cap) → keep
+                # Fail-open: an EMPTY compat list means the API had no
+                # compatibility data for this ref (common — supplier refs
+                # don't always resolve via search-by-article-oem-no), not
+                # proof of incompatibility. Only a NON-EMPTY list that
+                # explicitly excludes the searched vehicle causes a drop.
+                if not compat or _vehicle_compat_matches(compat, manu_name_in, engine_name_in):
                     return picked
-                # Compatibility check explicitly returned False → drop
+                # Non-empty compat list that does NOT match → explicitly incompatible
                 return []
             return picked
 
@@ -1535,6 +1886,7 @@ async def oem_stock_search(
     # page caused by the few slow ones.
     checked = len(candidates)
     all_results: list = []
+    timed_out = False
     deadline = 40.0
     started = asyncio.get_event_loop().time()
     pending_tasks = [asyncio.create_task(lookup(c, i)) for i, c in enumerate(candidates)]
@@ -1547,16 +1899,36 @@ async def oem_stock_search(
             if batch:
                 all_results.append(batch)
     except asyncio.TimeoutError:
+        timed_out = True
         elapsed = asyncio.get_event_loop().time() - started
         done = sum(1 for t in pending_tasks if t.done())
         logging.warning(
             f"oem-stock-search partial timeout for q={query!r}: "
             f"{done}/{len(pending_tasks)} candidates finished in {elapsed:.1f}s"
         )
-        # Cancel the laggards so we don't leak open httpx sockets
-        for t in pending_tasks:
+        # Laggards canceln — aber Cache-Vorwärmung im Hintergrund weiterlaufen lassen
+        cancelled_candidates = []
+        for i, t in enumerate(pending_tasks):
             if not t.done():
                 t.cancel()
+                if i < len(candidates):
+                    cancelled_candidates.append((i, candidates[i]))
+
+    # Background-Task: vorwärmt den supplier_lookup_cache für alle abgebrochenen Refs
+    # → beim nächsten Request sind diese sofort aus dem Cache verfügbar
+        async def _prewarm(cands):
+            prewarm_sem = asyncio.Semaphore(10)
+            async def _warm_one(c, idx):
+                async with prewarm_sem:
+                    try:
+                        await cached_supplier_search("fadpro", c["ref"], fadpro_search)
+                    except Exception:
+                        pass
+            await asyncio.gather(*[_warm_one(c, i) for i, c in cands], return_exceptions=True)
+
+        if cancelled_candidates:
+            asyncio.create_task(_prewarm(cancelled_candidates))
+            logging.info(f"Prewarm task started for {len(cancelled_candidates)} uncached refs (q={query!r})")
 
     results = []
     seen_refs = set()
@@ -1568,24 +1940,42 @@ async def oem_stock_search(
             seen_refs.add(key)
             results.append(r)
 
-    # Sub-category categorie filter — items whose `categorie` field (from
-    # the supplier, joined as "niv1 / niv2 / niv3 / niv4") does NOT satisfy
-    # the configured requirement are dropped. Configured via
-    # SUBCATEGORY_CATEGORY_FILTERS at module top, so adding a new
-    # sub-category rule is a one-line edit. Requirement may be a flat
-    # list (AND) or a list of lists (OR over AND-groups).
+    # Sub-category filter, two tiers:
+    #  1. Items WITH a non-empty `categorie` (FadPro): pass through the
+    #     configured SUBCATEGORY_CATEGORY_FILTERS rule (AND / OR-of-AND).
+    #  2. Items WITHOUT a `categorie` (Copia / PartsPro often ship empty
+    #     hierarchies): fall back to matching ALL tokens of the sub-category
+    #     `label` against the supplier `designation`. Example: label="Plage"
+    #     requires the token "plage" to appear inside the designation string.
+    # Items with an empty categorie AND no label provided are kept (no info
+    # to filter on) — this preserves the pre-change behaviour for legacy
+    # frontend calls that don't send a label.
+    cat_label = get_label_from_slug(slug) if slug else None
+    label_tokens = _designation_query_tokens(cat_label) if cat_label else []
+    if not label_tokens:
+        label_tokens = _designation_query_tokens(query)
+        
     cat_required = _category_filter_for_query(query)
-    if cat_required:
-        results = [
-            r for r in results
-            if _category_matches(r.get("categorie") or "", cat_required)
-        ]
 
+
+    def _passes_category_filter(r: dict) -> bool:
+        cat_str = r.get("categorie") or ""
+        if cat_str:
+            if cat_required:
+                return _category_matches(cat_str, cat_required)
+            return True
+        if label_tokens:
+            designation = r.get("designation") or r.get("name") or ""
+            return _designation_has_any_token(designation, label_tokens)
+        return True
+    if cat_required or label_tokens:
+        results = [r for r in results if _passes_category_filter(r)]        
     # Sort: in-stock items first, then by price ascending. Out-of-stock items
     # are still shown so the user can see what's available in the supplier
     # catalog (labelled "Hors stock" on the card).
     results.sort(key=lambda r: (0 if r.get("in_stock") else 1, r.get("prix_tnd") or 1e9))
-
+    completed = sum(1 for t in pending_tasks if t.done())
+    partial = completed < len(pending_tasks)
     return {
         "query": query,
         "model_id": model_id,
@@ -1593,7 +1983,14 @@ async def oem_stock_search(
         "checked": checked,
         "count": len(results),
         "items": results[:limit],
+        "is_partial": partial,
+        "prewarm_queued": partial,
     }
+
+def normalize(text: str) -> set:
+    if not text:
+        return set()
+    return set(_re.findall(r"[a-z0-9]+", text.lower()))
 
 
 class ManualVehicleIn(BaseModel):
@@ -1768,6 +2165,85 @@ async def update_order_status(order_id: str, payload: OrderStatusIn, admin: dict
     return {"ok": True}
 
 
+def _walk_category_node(section_data: dict, path_slugs: List[str]):
+    """Validiert den Pfad und gibt den letzten Node zurück (für label)."""
+    nodes = section_data["categories"]
+    node = None
+    for slug in path_slugs:
+        node = next((c for c in nodes if c["slug"] == slug), None)
+        if not node:
+            return None
+        nodes = node.get("children", [])
+    return node
+
+ALLOWED_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5 Mo
+
+
+@api.post("/admin/upload-image")
+async def admin_upload_image(file: UploadFile = File(...), admin: dict = Depends(require_admin)):
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_IMAGE_EXT:
+        raise HTTPException(400, "Format d'image non supporté (jpg, png, webp, gif)")
+
+    contents = await file.read()
+    if len(contents) > MAX_IMAGE_SIZE:
+        raise HTTPException(400, "Image trop volumineuse (max 5 Mo)")
+
+    filename = f"{uuid.uuid4()}{ext}"
+    filepath = UPLOAD_DIR / filename
+    with open(filepath, "wb") as f:
+        f.write(contents)
+
+    return {"url": f"/uploads/{filename}", "filename": filename}
+
+@api.post("/admin/parts")
+async def admin_create_part(data: ManualPartIn, admin: dict = Depends(require_admin)):
+    section = get_section(data.section)
+    if not section:
+        raise HTTPException(404, "Section introuvable")
+    if not data.category_path:
+        raise HTTPException(400, "Chemin de catégorie manquant")
+    node = _walk_category_node(section, data.category_path)
+    if not node:
+        raise HTTPException(404, "Catégorie/sous-catégorie introuvable")
+
+    compatible_refs = [r.strip() for r in (data.compatible_refs or []) if r and r.strip()]
+    
+
+    doc = {
+        "id": str(uuid.uuid4()),
+        "section": data.section,
+        "category_path": data.category_path,
+        "category_label": node["label"],
+        "ref": data.ref.strip(),
+        "name": data.name.strip(),
+        "brand": data.brand.strip(),
+        "price_tnd": data.price_tnd,
+        "image": data.image or "",
+        "reference_origine": data.reference_origine.strip() if data.reference_origine else "",
+        "compatible_refs": compatible_refs,
+        "stock": data.stock,
+        "source": "manual",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.manual_parts.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api.get("/admin/parts")
+async def admin_list_parts(admin: dict = Depends(require_admin)):
+    return await db.manual_parts.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+
+
+@api.delete("/admin/parts/{part_id}")
+async def admin_delete_part(part_id: str, admin: dict = Depends(require_admin)):
+    res = await db.manual_parts.delete_one({"id": part_id})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Article introuvable")
+    return {"ok": True}
+
 @api.post("/contact")
 async def create_contact_message(data: ContactIn, background_tasks: BackgroundTasks):
     if not data.message.strip():
@@ -1853,9 +2329,14 @@ async def on_startup():
         name="model_id_1_lang_id_1_q_1",
     )
     await seed_admin()
+    await db.password_resets.create_index("token", unique=True)
+    await db.password_resets.create_index("expires_at", expireAfterSeconds=0)
 
 
 app.include_router(api)
+
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+
 
 app.add_middleware(
     CORSMiddleware,

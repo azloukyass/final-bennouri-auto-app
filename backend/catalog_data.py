@@ -16,7 +16,9 @@ def _p(ref: str, name: str, price: float, brand: str, img: str, desc: str = ""):
         "description": desc or f"Pièce d'origine équipementier — {name}",
         "stock": 25,
     }
-
+    
+def IMG(slug):
+    return f"/{slug}.png"
 
 CATALOG = {
     "mecanique": {
@@ -27,13 +29,9 @@ CATALOG = {
             {
                 "slug": "moteur",
                 "label": "Moteur",
-                "icon": "engine",
-                "image": PEX(4489732),
+                "image": IMG("moteur-car"),
                 "children": [
-                    {"slug": "support-moteur", "label": "Support moteur", "search_keyword": "Support moteur", "children": [
-                        {"slug": "support-boot", "label": "Support Boîte", "search_keyword": "Support, Boîte automatique", "children": []},
-                        {"slug": "support-moteur-d", "label": "Support Moteur D/G", "search_keyword": "Support moteur", "children": []},
-                    ]},
+                    {"slug": "support-moteur-d", "label": "Support Moteur D/G", "search_keyword": "Support moteur", "children": []},
                     {"slug": "kit-chaine", "label": "Kit chaîne", "search_keyword": "Kit,chaine,distribution", "split_keywords": True, "children": []},
                     {"slug": "pompe-a-eau", "label": "Pompe à eau", "search_keyword": "Pompe à eau, refroidissement du moteur", "children": []},
                     {"slug": "radiateur-eau", "label": "Radiateur d'eau", "search_keyword": "Caisse à eau, radiateur", "children": []},
@@ -42,13 +40,11 @@ CATALOG = {
                     {"slug": "filtre-huile", "label": "Filtre à huile", "search_keyword": "Filtre à huile", "children": []},
                     {"slug": "filtre-air", "label": "Filtre à air", "search_keyword": "Filtre à air", "children": []},
                     {"slug": "filtre-gazoil", "label": "Filtre gazoil / Filtre à essence", "search_keyword": "Filtre à carburant", "children": []},
-                    {"slug": "radiateur-turbo", "label": "Radiateur turbo", "search_keyword": "turbo", "children": []},
+                    {"slug": "radiateur-turbo", "label": "Radiateur turbo", "search_keyword": "Intercooler, échangeur", "children": []},
                     {"slug": "filtre-habitacle", "label": "Filtre habitacle", "search_keyword": "Filtre, air de l'habitacle", "children": []},
                     {"slug": "turbo", "label": "Turbo", "search_keyword": "Turbocompresseur, suralimentation", "children": []},
                     {"slug": "vase-eau", "label": "Vase d'eau", "search_keyword": "Vase d'expansion, liquide de refroidissement", "children": []},
-                    {"slug": "pipette-eau", "label": "Pipette d'eau", "search_keyword": "Bride de liquide de refroidissement", "children": []},
                     {"slug": "ventilateur", "label": "Ventilateur", "search_keyword": "Ventilateur, refroidissement du moteur", "children": []},
-                    {"slug": "injecteur", "label": "Injecteur", "search_keyword": "Injecteur", "children": []},
                     {"slug": "pompe-assistee", "label": "Pompe assistée", "search_keyword": "Pompe hydraulique, direction", "children": []},
                 ],
                 "parts": [],
@@ -56,8 +52,7 @@ CATALOG = {
             {
                 "slug": "boite-vitesses",
                 "label": "Boîte de vitesses",
-                "icon": "gearbox",
-                "image": PEX(13065690),
+                "image": IMG("boite-vitesses"),
                 "children": [
                     {"slug": "kit-embrayage", "label": "Kit embrayage", "search_keyword": "Kit d'embrayage", "children": []},
                     {"slug": "recepteur-embrayage", "label": "Récepteur embrayage", "search_keyword": "Cylindre récepteur, embrayage", "children": []},
@@ -72,8 +67,7 @@ CATALOG = {
             {
                 "slug": "suspension",
                 "label": "Suspension",
-                "icon": "suspension",
-                "image": PEX(4480456),
+                "image": IMG("suspension"),
                 "children": [
                     {"slug": "av", "label": "Avant (AV) / Arrière (AR)", "children": [
                         {"slug": "amortisseur", "label": "Amortisseur", "search_keyword": "Amortisseur", "children": []},
@@ -101,8 +95,7 @@ CATALOG = {
             {
                 "slug": "freinage",
                 "label": "Freinage",
-                "icon": "brake",
-                "image": PEX(1545743),
+                "image": IMG("engine"),
                 "children": [
                     {"slug": "av", "label": "Avant (AV) / Arrière (AR)", "children": [
                         {"slug": "plaquettes-av", "label": "Plaquettes AV", "search_keyword": "Kit de plaquettes de frein, frein à disque", "children": []},
@@ -111,7 +104,6 @@ CATALOG = {
                         {"slug": "maitre-cylindre", "label": "Maître-cylindre", "search_keyword": "Maître-cylindre de frein", "children": []},
                         {"slug": "tambour-ar", "label": "Tambour AR", "search_keyword": "Tambour de frein", "children": []},
                         {"slug": "cylindre-roue", "label": "Cylindre de roue", "search_keyword": "Cylindre de roue", "children": []},
-                        {"slug": "servo-frein", "label": "Servo de frein", "search_keyword": "servo,frein,amplificateur", "children": []},
                         {"slug": "flexible-ar", "label": "Flexible AR", "search_keyword": "Flexible de frein", "children": []},
                     ]},
                 ],
@@ -125,19 +117,9 @@ CATALOG = {
         "description": "Batterie, démarrage, éclairage, électronique embarquée et confort.",
         "categories": [
             {
-                "slug": "bougie",
-                "label": "Bougie",
-                "icon": "engine",
-                "image": PEX(4489732),
-                "search_keyword": "Bougie d'allumage",
-                "children": [],
-                "parts": [],
-            },
-            {
                 "slug": "optique",
                 "label": "Optique G+D",
-                "icon": "suspension",
-                "image": PEX(4480456),
+                "image": IMG("optique"),
                 "search_keyword": "Kit de réparation, phare principal (support)",
                 "children": [],
                 "parts": [],
@@ -145,26 +127,15 @@ CATALOG = {
             {
                 "slug": "feu-ar",
                 "label": "Feu AR G+D",
-                "icon": "brake",
-                "image": PEX(1545743),
+                "image": IMG("feu-ar"),
                 "search_keyword": "Feu arrière",
-                "children": [],
-                "parts": [],
-            },
-            {
-                "slug": "feu-de-position",
-                "label": "Feu de position",
-                "icon": "brake",
-                "image": PEX(1545743),
-                "search_keyword": "Projecteur principal",
                 "children": [],
                 "parts": [],
             },
             {
                 "slug": "capteur-abs",
                 "label": "Capteur ABS",
-                "icon": "brake",
-                "image": PEX(1545743),
+                "image": IMG("capteurabs"),
                 "search_keyword": "Capteur, vitesse de roue",
                 "children": [],
                 "parts": [],
@@ -172,8 +143,7 @@ CATALOG = {
             {
                 "slug": "antibrouillard",
                 "label": "Antibrouillard",
-                "icon": "brake",
-                "image": PEX(1545743),
+                "image": IMG("antibrouillard"),
                 "search_keyword": "Projecteur antibrouillard",
                 "children": [],
                 "parts": [],
@@ -181,8 +151,7 @@ CATALOG = {
             {
                 "slug": "retrouneuse",
                 "label": "Rétroviseur",
-                "icon": "brake",
-                "image": PEX(1545743),
+                "image": IMG("retroviseur"),
                 "search_keyword": "Rétroviseur extérieur",
                 "children": [],
                 "parts": [],
@@ -190,34 +159,22 @@ CATALOG = {
             {
                 "slug": "klaxon",
                 "label": "Klaxon",
-                "icon": "brake",
-                "image": PEX(1545743),
+                "image": IMG("klaxon"),
                 "search_keyword": "Avertisseur sonore",
-                "children": [],
-                "parts": [],
-            },
-            {
-                "slug": "sond-pompe-a",
-                "label": "Sonde pompe A",
-                "icon": "brake",
-                "image": PEX(1545743),
-                "search_keyword": "Sonde lambda",
                 "children": [],
                 "parts": [],
             },
             {
                 "slug": "batterie",
                 "label": "Batterie",
-                "icon": "brake",
-                "image": PEX(1545743),
+                "image": IMG("batterie"),
                 "search_keyword": "Batterie de démarrage",
                 "parts": [],
             },
             {
                 "slug": "bouton",
                 "label": "bouton Lave Vitre",
-                "icon": "brake",
-                "image": PEX(1545743),
+                "image": IMG("bouton"),
                 "search_keyword": "Interrupteur, lève-vitre",
                 "parts": [],
             },
@@ -229,19 +186,11 @@ CATALOG = {
         "description": "Pare-chocs, ailes, capots, portes, vitres et pièces de carrosserie.",
         "categories": [
             {
-                "slug": "av", "label": "Avant (AV)", "icon": "brake", "image": PEX(1545743), "children": [
+                "slug": "av", "label": "Avant (AV)", "image": IMG("crarossiere-av"), "children": [
                 {"slug": "capot-moteur", "label": "Capot moteur", "icon": "brake", "image": PEX(1545743), "search_keyword": "Capot-moteur", "children": []},
                 {"slug": "aile-av", "label": "Aile AV", "icon": "brake", "image": PEX(1545743), "search_keyword": "Aile", "children": []},
-                {
-                    "slug": "parechoc-av", "label": "Pare-choc AV", "icon": "brake", "image": PEX(1545743), "search_keyword": "Pare-chocs", "children": [
-                    {"slug": "spoiler", "label": "Spoiler", "icon": "brake", "image": PEX(1545743), "search_keyword": "Spoiler", "children": []},
-                    {"slug": "grille-centrale", "label": "Grille centrale", "icon": "brake",  "image": PEX(1545743), "search_keyword": "Grille de ventilation, pare-chocs", "children": []},
-                    {"slug": "cache-antibrouillard", "label": "Cache antibrouillard", "icon": "brake", "image": PEX(1545743),
-                     "search_keyword": "Capuchon, crochet de remorquage", "children": []},
-                ]
-                },
+                {"slug": "parechoc-av", "label": "Pare-choc AV", "icon": "brake", "image": PEX(1545743), "search_keyword": "Pare-chocs", "children": []},
                 {"slug": "cache-moteur", "label": "Cache moteur", "icon": "brake", "image": PEX(1545743), "search_keyword": "Cache moteur", "children": []},
-                {"slug": "calandre", "label": "Calandre", "icon": "brake",  "image": PEX(1545743), "search_keyword": "Grille de radiateur", "children": []},
                 {"slug": "plage-av", "label": "Plage AV",  "icon": "brake", "image": PEX(1545743), "search_keyword": "Revêtement avant", "children": []},
                 {"slug": "support-plage", "label": "Support plage", "icon": "brake", "image": PEX(1545743), "search_keyword": "Fixation de phare", "children": []},
                 {"slug": "berceau", "label": "Berceau", "icon": "brake", "image": PEX(1545743), "search_keyword": "Traverse", "children": []},
@@ -251,7 +200,7 @@ CATALOG = {
             ]
             },
             {
-                "slug": "ar", "label": "Arrière (AR)", "icon": "brake",  "image": PEX(1545743), "children": [
+                "slug": "ar", "label": "Arrière (AR)", "image": IMG("crarossiere-ar"), "children": [
                 {"slug": "parechoc-ar", "label": "Pare-choc AR", "icon": "brake", "image": PEX(1545743), "search_keyword": "Pare-chocs", "children": []},
                 {"slug": "malle-ar", "label": "Malle AR",  "icon": "brake", "image": PEX(1545743), "search_keyword": "Porte arrière", "children": []},
                 {"slug": "traverse-ar", "label": "Traverse AR", "icon": "brake", "image": PEX(1545743), "search_keyword": "Traverse", "children": []},
@@ -285,3 +234,39 @@ def find_part(ref: str):
                 if part["ref"] == ref:
                     return part
     return None
+
+
+
+CATALOG_INDEX = {}
+
+def build_label_index():
+    index = {}
+
+    def walk_categories(categories):
+        for cat in categories:
+            if not isinstance(cat, dict):
+                continue
+
+            slug = cat.get("slug")
+            label = cat.get("label")
+
+            if slug and label:
+                index[slug] = label
+
+            children = cat.get("children", [])
+            if children:
+                walk_categories(children)
+
+    # sections level
+    for section in CATALOG.values():
+        categories = section.get("categories", [])
+        walk_categories(categories)
+
+    return index
+
+
+CATALOG_INDEX = build_label_index()
+
+
+def get_label_from_slug(slug: str):
+    return CATALOG_INDEX.get(slug)

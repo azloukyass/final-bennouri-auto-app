@@ -4,18 +4,16 @@ import {
 } from "lucide-react";
 
 const PARTNERS = [
-  { name: "Bosch", color: "#ED1C24" },
-  { name: "Brembo", color: "#E60000" },
-  { name: "Shell", color: "#FBCE07" },
-  { name: "Mann-Filter", color: "#00945E" },
-  { name: "Valeo", color: "#0066B2" },
-  { name: "Mahle", color: "#009D58" },
-  { name: "NGK", color: "#E30613" },
-  { name: "TRW", color: "#003DA5" },
-  { name: "SKF", color: "#003D7C" },
-  { name: "Continental", color: "#FFA500" },
-  { name: "Ashika", color: "#0066B2" },
-  { name: "FadPro", color: "#1F2937" },
+  { name: "Bosch", logo: "boesch.png" },
+  { name: "Brembo", logo: "Brembo.png" },
+  { name: "Shell", logo: "shell.png" },
+  { name: "Valeo", logo: "valeo.png" },
+  { name: "Mahle", logo: "mahle.png" },
+  { name: "Continental", logo: "Continental.png" },
+  { name: "Castrol", logo: "Castrol.png" },
+  { name: "Denso", logo: "Denso.png" },
+  { name: "Monroe", logo: "monroe.png" },
+  { name: "Delphi", logo: "Delphi.png" },
 ];
 
 const STATS = [
@@ -113,34 +111,43 @@ export default function About() {
         </div>
       </section>
 
-      {/* Partners */}
-      <section className="bg-slate-50 border-y border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          <div className="text-center mb-10">
-            <div className="text-[10px] font-bold uppercase tracking-[0.4em] text-red-600 mb-2">Nos partenaires</div>
-            <h2 className="font-display text-3xl sm:text-4xl font-black uppercase tracking-tight text-slate-900">
-              Les meilleures marques mondiales
-            </h2>
-            <p className="mt-3 text-slate-600 text-sm max-w-2xl mx-auto">
-              Nous travaillons exclusivement avec des équipementiers de renommée internationale pour garantir
-              la fiabilité et la longévité de chaque pièce vendue.
-            </p>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            {PARTNERS.map((p) => (
-              <div
-                key={p.name}
-                className="bg-white border border-slate-200 rounded-sm py-6 px-4 text-center hover:shadow-md hover:-translate-y-0.5 transition-all"
-                style={{ borderTopColor: p.color, borderTopWidth: 3 }}
-                data-testid={`partner-${p.name}`}
-              >
-                <div className="font-display font-black text-sm tracking-wider text-slate-900 uppercase">{p.name}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+{/* Partners — animated marquee with real logo images */}
+<section className="bg-slate-50 border-y border-slate-200 overflow-hidden">
+  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+    <div className="text-center mb-10">
+      <div className="text-[10px] font-bold uppercase tracking-[0.4em] text-red-600 mb-2">Nos partenaires</div>
+      <h2 className="font-display text-3xl sm:text-4xl font-black uppercase tracking-tight text-slate-900">
+        Les meilleures marques mondiales
+      </h2>
+      <p className="mt-3 text-slate-600 text-sm max-w-2xl mx-auto">
+        Nous travaillons exclusivement avec des équipementiers de renommée internationale pour garantir
+        la fiabilité et la longévité de chaque pièce vendue.
+      </p>
+    </div>
+  </div>
 
+  <div className="relative w-full">
+    <div className="pointer-events-none absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-slate-50 to-transparent z-10" />
+    <div className="pointer-events-none absolute inset-y-0 right-0 w-16 bg-gradient-to-l from-slate-50 to-transparent z-10" />
+
+    <div className="flex w-max animate-marquee gap-4 py-2">
+      {[...PARTNERS, ...PARTNERS].map((p, idx) => (
+        <div
+          key={`${p.name}-${idx}`}
+          className="bg-white border border-slate-200 rounded-sm py-6 px-8 flex items-center justify-center hover:shadow-md transition-all flex-shrink-0 w-44 h-20"
+          data-testid={`partner-${p.name}`}
+        >
+          <img
+            src={p.logo}
+            alt={p.name}
+            className="max-w-full max-h-15 object-contain"
+            onError={(e) => { e.target.style.display = "none"; }}
+          />
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
       {/* Showroom & contact info */}
       <section className="bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 grid lg:grid-cols-2 gap-12 items-start">
@@ -196,32 +203,6 @@ export default function About() {
               </div>
               <div className="font-display font-black text-lg leading-tight">BENOURI Ben Arous</div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA strip */}
-      <section className="bg-black text-white relative overflow-hidden">
-        <div className="absolute -right-40 -top-40 w-[500px] h-[500px] bg-red-600/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 grid lg:grid-cols-[1fr_auto] items-center gap-6">
-          <div>
-            <div className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.4em] text-red-500 mb-3">
-              <Sparkles className="w-3 h-3" /> Prêt à équiper votre véhicule ?
-            </div>
-            <h2 className="font-display text-3xl sm:text-4xl font-black uppercase tracking-tight">
-              Trouvez vos pièces en quelques secondes
-            </h2>
-            <p className="mt-2 text-slate-300 text-sm max-w-2xl">
-              Recherchez par numéro VIN ou parcourez nos marques — chaque article est vérifié en stock chez nos partenaires.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Link to="/recherche-vin" className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold uppercase text-sm tracking-wider px-6 py-3 rounded-sm">
-              Rechercher par VIN <ArrowRight className="w-4 h-4" />
-            </Link>
-            <Link to="/" className="inline-flex items-center border border-white/30 hover:border-white text-white font-bold uppercase text-sm tracking-wider px-6 py-3 rounded-sm">
-              Parcourir les marques
-            </Link>
           </div>
         </div>
       </section>

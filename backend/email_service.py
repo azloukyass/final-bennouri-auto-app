@@ -231,6 +231,51 @@ def render_welcome(user_name: str, user_email: str) -> str:
     )
 
 
+def render_password_reset(user_name: str, reset_url: str) -> str:
+    body = f"""
+    <p style="font-size:16px;margin:0 0 16px 0;">Bonjour <strong style="color:{BRAND_NAVY};">{user_name}</strong>,</p>
+
+    <p style="margin:0 0 18px 0;">
+      Vous avez demandé la réinitialisation de votre mot de passe pour votre compte
+      <strong style="color:{BRAND_NAVY};">BENNOURI Pièces Auto</strong>.
+      Cliquez sur le bouton ci-dessous pour choisir un nouveau mot de passe.
+    </p>
+
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+      <tr>
+        <td style="background:{BRAND_RED};border-radius:3px;">
+          <a href="{reset_url}"
+             style="display:inline-block;padding:14px 28px;color:#ffffff;font-family:'Helvetica Neue',Arial,sans-serif;font-size:14px;font-weight:700;text-decoration:none;letter-spacing:0.5px;">
+            RÉINITIALISER MON MOT DE PASSE →
+          </a>
+        </td>
+      </tr>
+    </table>
+
+    <p style="margin:0 0 18px 0;font-size:13px;color:{BRAND_MUTED};">
+      Ce lien est valable <strong>30 minutes</strong>. Si vous n'êtes pas à l'origine de cette demande,
+      ignorez simplement cet email — votre mot de passe restera inchangé.
+    </p>
+    """
+    return _wrap(
+        title="Réinitialisation de votre mot de passe · BENNOURI",
+        hero_eyebrow="Sécurité du compte",
+        hero_title="Réinitialisation de mot de passe",
+        hero_subtitle="Ce lien expire dans 30 minutes.",
+        body_html=body,
+    )
+
+
+async def send_password_reset_email(user_name: str, user_email: str, token: str) -> bool:
+    frontend_url = os.environ.get("FRONTEND_URL", "https://bennouri.tn")
+    reset_url = f"{frontend_url}/reinitialiser-mot-de-passe?token={token}"
+    html = render_password_reset(user_name, reset_url)
+    return await send_email(
+        to=user_email,
+        subject="Réinitialisation de votre mot de passe — BENNOURI",
+        html=html,
+    )
+
 def render_order_confirmation(order: Dict) -> str:
     items = order.get("items", [])
     items_rows = ""

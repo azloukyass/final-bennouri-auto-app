@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { X, ShoppingCart, Package, Loader2, Search, AlertCircle, Tag, BadgeCheck, Layers } from "lucide-react";
 import { toast } from "sonner";
 import { api, formatApiError, formatPrice } from "@/lib/api";
@@ -8,6 +9,7 @@ const SOURCE_THEME = {
   fadpro:   { name: "Fournisseur", accent: "from-amber-400 to-amber-600",  ring: "ring-amber-400/40",  text: "text-amber-300",  bgChip: "bg-amber-500/15" },
   copia:    { name: "Fournisseur", accent: "from-sky-400 to-sky-600",      ring: "ring-sky-400/40",    text: "text-sky-300",    bgChip: "bg-sky-500/15" },
   partspro: { name: "Fournisseur", accent: "from-violet-400 to-violet-600",ring: "ring-violet-400/40", text: "text-violet-300", bgChip: "bg-violet-500/15" },
+  proad:    { name: "Fournisseur", accent: "from-emerald-400 to-emerald-600", ring: "ring-emerald-400/40", text: "text-emerald-300", bgChip: "bg-emerald-500/15" },  // 👈 NEU
 };
 
 /**
@@ -18,6 +20,7 @@ const SOURCE_THEME = {
  */
 export default function PartnersSearchModal({ open, query, categorySlug, onClose }) {
   const { add: addToCart } = useCart();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [items, setItems] = useState([]);
@@ -68,6 +71,11 @@ export default function PartnersSearchModal({ open, query, categorySlug, onClose
     );
     toast.success(`${q} × ${it.reference} ajouté au panier`);
   };
+
+  const goToDetail = (it) => {
+  onClose();
+  navigate(`/article/${encodeURIComponent(it.reference)}`);
+};
 
   return (
     <div
@@ -154,6 +162,7 @@ export default function PartnersSearchModal({ open, query, categorySlug, onClose
                 return (
                   <div
                     key={`${it.source}-${it.reference}-${i}`}
+                    onClick={() => goToDetail(it)}
                     className={`relative bg-zinc-900/80 border border-white/10 hover:border-white/30 rounded-sm overflow-hidden ring-1 ${theme.ring} hover:-translate-y-0.5 transition-all`}
                     data-testid={`partners-card-${it.source}-${it.reference}`}
                   >
@@ -192,11 +201,8 @@ export default function PartnersSearchModal({ open, query, categorySlug, onClose
                           <div className="font-display font-black text-2xl text-red-500 leading-none">
                             {formatPrice(it.prix_tnd)}
                           </div>
-                          <div className={`text-[11px] mt-1 ${stockColor}`}>
-                            {it.in_stock ? `${it.stock} disponible${it.stock > 1 ? "s" : ""}` : "Non en stock"}
-                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                           <div className="inline-flex items-center border border-white/20 rounded-sm bg-zinc-900">
                             <button onClick={() => setQtys((s) => ({ ...s, [it.reference]: Math.max(1, q - 1) }))} className="px-2 py-1.5 text-white/70 hover:text-white hover:bg-white/5">−</button>
                             <span className="px-2.5 text-sm font-bold w-8 text-center">{q}</span>

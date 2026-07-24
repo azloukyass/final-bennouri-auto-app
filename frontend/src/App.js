@@ -1,5 +1,4 @@
 import "@/App.css";
-import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/context/AuthContext";
@@ -7,7 +6,6 @@ import { CartProvider } from "@/context/CartContext";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import SplashScreen from "@/components/SplashScreen";
 
 import LandingPage from "@/pages/LandingPage";
 import VinSearch from "@/pages/VinSearch";
@@ -30,6 +28,8 @@ import SearchResults from "@/pages/SearchResults";
 import Contact from "@/pages/Contact";
 import Impressum from "@/pages/Impressum";
 import NotFound from "@/pages/NotFound";
+import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
 
 function Layout({ children }) {
   return (
@@ -42,28 +42,11 @@ function Layout({ children }) {
 }
 
 export default function App() {
-  const [showSplash, setShowSplash] = useState(() => {
-    // Show splash only on first load per browser session
-    try {
-      return !sessionStorage.getItem("bn_splash_done");
-    } catch {
-      return true;
-    }
-  });
-
-  useEffect(() => {
-    if (!showSplash) return;
-    try {
-      sessionStorage.setItem("bn_splash_done", "1");
-    } catch {}
-  }, [showSplash]);
-
   return (
     <AuthProvider>
       <CartProvider>
         <BrowserRouter>
           <Toaster position="top-right" richColors />
-          {showSplash && <SplashScreen onDone={() => setShowSplash(false)} duration={4500} />}
           <Layout>
             <Routes>
               <Route path="/" element={<LandingPage />} />
@@ -94,6 +77,8 @@ export default function App() {
                 }
               />
               <Route path="/connexion" element={<Login />} />
+              <Route path="/mot-de-passe-oublie" element={<ForgotPassword />} />
+              <Route path="/reinitialiser-mot-de-passe" element={<ResetPassword />} /> 
               <Route path="/a-propos" element={<About />} />
               <Route path="/article/:ref" element={<ArticleDetail />} />
               <Route path="/inscription" element={<Register />} />

@@ -199,6 +199,7 @@ export const Engine = ({ className = "" }) => (
   </svg>
 );
 
+
 export const Categories = {
   moteur: Engine,
   huiles: OilBottle,

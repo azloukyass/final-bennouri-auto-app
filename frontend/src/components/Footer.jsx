@@ -36,27 +36,86 @@ function CashIcon() {
 export default function Footer() {
   return (
     <footer className="bg-black text-white/80 border-t border-red-600/30" data-testid="site-footer">
-      {/* Trust strip */}
-      <div className="border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 grid grid-cols-2 md:grid-cols-4 gap-6">
-          {[
-            { icon: Truck, t: "Livraison rapide", s: "Toute la Tunisie" },
-            { icon: Shield, t: "Pièces garanties", s: "Qualité OEM" },
-            { icon: Award, t: "Marques premium", s: "Bosch, Valeo, Bilstein" },
-            { icon: Clock, t: "Support 7j/7", s: "8h - 20h" },
-          ].map((it, i) => (
-            <div key={i} className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-full bg-red-600/10 border border-red-600/30 flex items-center justify-center flex-shrink-0">
-                <it.icon className="w-5 h-5 text-red-500" />
-              </div>
-              <div>
-                <div className="text-white font-bold uppercase text-sm tracking-wider">{it.t}</div>
-                <div className="text-white/50 text-xs">{it.s}</div>
-              </div>
-            </div>
-          ))}
+{/* Trust strip */}
+<div className="bg-white border-b border-slate-200">
+  <div className="w-full px-[70px] py-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    {[
+{
+  bg: "/engine.png",
+  badge: "-20%",
+  title: "Promo du mois",
+  sub: "Sur une sélection de pièces",
+  cta: "Profiter",
+  to: "/",
+  imgClass: "right-8 scale-150",
+},
+{
+  bg: "/livrision-auto.png",
+  badge: "24H",
+  title: "Livraison en 24h",
+  sub: "Sur toute la Tunisie",
+  cta: "En savoir +",
+  to: "/",
+  imgClass: "right-12 scale-150 -translate-y-7",
+},
+      {
+        bg: "/paiment.png",
+        badge: "SÉCURISÉ",
+        title: "Paiement sécurisé",
+        sub: "100% sûr",
+        cta: "En savoir +",
+        to: "/",
+      },
+      {
+        bg: "/support.png",
+        badge: null,
+        title: "Besoin d'aide ?",
+        sub: "Notre équipe est à votre disposition",
+        cta: "Contacter",
+        to: "/contact",
+        phone: "+216 98 123 456",
+          imgClass: "right-8",
+      },
+    ].map((c, i) => (
+      <Link
+        key={i}
+        to={c.to}
+        className="group relative overflow-hidden rounded-sm h-40 sm:h-44 flex flex-col justify-between p-4 bg-black"
+        data-testid={`footer-promo-card-${i}`}
+      >
+        {/* Background image — full, unscaled, bleeding to the right edge */}
+        <img
+          src={c.bg}
+          alt=""
+          className={`absolute inset-y-0 h-full w-auto object-cover object-right ${c.imgClass || "max-w-[65%] right-0"}`}
+        />
+        {/* Dark gradient overlay for text legibility on the left */}
+        <div className="absolute inset-0 bg-gradient-to-r from-black via-black/85 to-transparent" />
+
+        {/* Content */}
+        <div className="relative z-10">
+          {c.badge && (
+            <span className="block text-red-500 font-display font-black text-2xl leading-none mb-1">
+              {c.badge}
+            </span>
+          )}
+          <h3 className="text-white font-display font-black uppercase text-sm sm:text-base leading-tight">
+            {c.title}
+          </h3>
+          <p className="text-white/70 text-[11px] sm:text-xs mt-1 leading-snug max-w-[70%]">
+            {c.sub}
+          </p>
         </div>
-      </div>
+
+        <div className="relative z-10">
+          <span className="inline-flex items-center bg-red-600 group-hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-sm transition-colors">
+            {c.cta}
+          </span>
+        </div>
+      </Link>
+    ))}
+  </div>
+</div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 grid grid-cols-1 md:grid-cols-4 gap-10">
         <div className="md:col-span-1">
@@ -90,7 +149,7 @@ export default function Footer() {
             </li>
             <li className="flex items-center gap-3">
               <Clock className="w-4 h-4 text-red-500 flex-shrink-0" />
-              <span>Lun - Sam: 8h00 - 20h00</span>
+              <span>Lun - Dim: 8h00 - 20h00</span>
             </li>
           </ul>
         </div>
@@ -109,6 +168,19 @@ export default function Footer() {
         </div>
 
         <div>
+          <h4 className="text-white font-display font-bold text-sm uppercase tracking-wider mb-4"></h4>
+          <div className="flex items-center gap-2" data-testid="footer-payment-icons">
+           <img
+  src="promo.png"
+  alt="Paiement sécurisé"
+  className="w-30 h-auto object-contain mb-4"
+  style={{ transform: "rotate(-8deg)" }}
+/>
+          </div>
+        </div> 
+
+
+      {/* <div>
           <h4 className="text-white font-display font-bold text-sm uppercase tracking-wider mb-4">Paiement</h4>
           <p className="text-sm text-white/60 mb-4">Paiement sécurisé à la livraison ou par carte bancaire.</p>
           <div className="flex items-center gap-2" data-testid="footer-payment-icons">
@@ -116,7 +188,7 @@ export default function Footer() {
             <MastercardIcon />
             <CashIcon />
           </div>
-        </div>
+        </div> */}
       </div>
 
       <div className="border-t border-white/10 bg-black">
