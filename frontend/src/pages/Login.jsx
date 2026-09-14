@@ -28,10 +28,10 @@ export default function Login() {
   };
 
   return (
-    <div className="max-w-md mx-auto px-4 sm:px-6 py-16" data-testid="login-page">
+    <div className="max-w-md mx-auto px-4 sm:px-6 py-16 bg-white" data-testid="login-page">
       <div className="text-center mb-8">
         <h1 className="font-display text-4xl font-black tracking-tight text-slate-900 uppercase">Connexion</h1>
-        <p className="mt-2 text-sm font-semibold tracking-wide text-slate-500">Accédez à votre compte <span className="text-red-600 font-bold">BENNOURI</span></p>
+        <p className="mt-2 text-sm font-semibold tracking-wide text-slate-500">Accédez à votre compte <span className="text-blue-600 font-bold">BENNOURI</span></p>
       </div>
 
       <form onSubmit={submit} className="bg-white border border-slate-200 rounded-sm p-8 shadow-sm">
@@ -42,7 +42,7 @@ export default function Login() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full pl-10 pr-3 py-3 border border-slate-300 rounded-sm focus:border-red-600 outline-none"
+            className="w-full pl-10 pr-3 py-3 border border-slate-300 rounded-sm focus:border-blue-600 outline-none"
             placeholder="email@exemple.com"
             required
             data-testid="login-email-input"
@@ -56,7 +56,7 @@ export default function Login() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full pl-10 pr-3 py-3 border border-slate-300 rounded-sm focus:border-red-600 outline-none"
+            className="w-full pl-10 pr-3 py-3 border border-slate-300 rounded-sm focus:border-blue-600 outline-none"
             placeholder="••••••••"
             required
             data-testid="login-password-input"
@@ -64,11 +64,16 @@ export default function Login() {
         </div>
 
          <div className="mt-2 text-right">
-  <Link to="/mot-de-passe-oublie" className="text-xs text-red-600 hover:underline font-medium" data-testid="login-forgot-password-link">
+  <Link to="/mot-de-passe-oublie" className="text-xs text-blue-600 hover:underline font-medium" data-testid="login-forgot-password-link">
     Mot de passe oublié ?
   </Link>
 </div>
-        <button type="submit" disabled={loading} className="mt-6 w-full bn-btn-primary disabled:opacity-60" data-testid="login-submit-button">
+        <button
+          type="submit"
+          disabled={loading}
+          className="mt-6 w-full inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold uppercase tracking-wider px-6 py-3 rounded-sm transition-colors"
+          data-testid="login-submit-button"
+        >
           {loading ? "Connexion..." : (<><LogIn className="w-4 h-4" /> Se connecter</>)}
         </button>
 
@@ -89,7 +94,7 @@ export default function Login() {
 
         <p className="mt-6 text-sm text-center text-slate-500">
           Pas encore de compte ?{" "}
-          <Link to="/inscription" className="text-red-600 hover:underline font-medium" data-testid="login-to-register">S'inscrire</Link>
+          <Link to="/inscription" className="text-blue-600 hover:underline font-medium" data-testid="login-to-register">S'inscrire</Link>
         </p>
       </form>
     </div>

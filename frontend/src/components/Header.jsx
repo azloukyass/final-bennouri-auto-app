@@ -31,6 +31,24 @@ const TikTokIcon = ({ className = "" }) => (
   </svg>
 );
 
+const SEARCH_STORAGE_KEY = "bennouri:lastSearchQuery";
+
+const readLastSearch = () => {
+  try {
+    return sessionStorage.getItem(SEARCH_STORAGE_KEY) || "";
+  } catch {
+    return "";
+  }
+};
+
+const saveLastSearch = (v) => {
+  try {
+    sessionStorage.setItem(SEARCH_STORAGE_KEY, v);
+  } catch {
+    // sessionStorage unavailable (private mode etc.) — fail silently
+  }
+};
+
 export default function Header() {
   const { user, logout } = useAuth();
   const { count } = useCart();
@@ -44,155 +62,164 @@ export default function Header() {
     e.preventDefault();
     const v = q.trim();
     if (v.length < 2) return;
-    if (!user) {
-      toast.error("Connectez-vous pour rechercher une référence");
-      navigate("/connexion");
-      return;
-    }
+    saveLastSearch(v);
     setSearchQuery(v);
     setSearchOpen(true);
     setOpen(false);
   };
 
+  const handleSearchFocus = () => {
+    if (q) return;
+    const last = readLastSearch();
+    if (last) setQ(last);
+  };
+
   const navLink = ({ isActive }) =>
     `text-sm font-semibold tracking-wide uppercase transition-colors ${
-      isActive ? "text-red-500" : "text-white hover:text-red-400"
+      isActive ? "text-blue-900 underline decoration-2 underline-offset-4" : "text-blue-900/60 hover:text-blue-900"
     }`;
 
   return (
-    <header className="sticky top-0 z-40 bg-black border-b border-red-600/30" data-testid="site-header">
+    <header className="sticky top-0 z-40 bg-white border-b border-blue-900/20" data-testid="site-header">
       {/* Top utility bar */}
-      <div className="bg-black border-b border-white/10">
-<div className="px-[70px] flex items-center justify-between h-10 text-xs text-white">
-          <div className="inline-flex items-center gap-2 font-medium">
-            <Truck className="w-3.5 h-3.5 text-red-500" />
-            <span>Livraison rapide dans toute la Tunisie</span>
+      <div className="bg-white border-b border-blue-900/10">
+        <div className="px-4 sm:px-6 lg:px-[70px] flex items-center justify-between h-9 sm:h-10 text-[11px] sm:text-xs text-blue-900 gap-3">
+          <div className="hidden sm:inline-flex items-center gap-2 font-medium truncate">
+            <Truck className="w-3.5 h-3.5 text-blue-900 flex-shrink-0" />
+            <span className="truncate">Livraison rapide dans toute la Tunisie</span>
           </div>
-          <div className="flex items-center gap-5 font-medium">
-            <Link to="/a-propos" className="text-white hover:text-red-500 transition-colors hidden sm:inline">À propos de nous</Link>
-            <Link to="/contact" className="text-white hover:text-red-500 transition-colors">Contactez-nous</Link>
-            <div className="flex items-center gap-3 pl-2 border-l border-white/15">
-              <a href="https://www.facebook.com/profile.php?id=61575421658002" target="_blank" rel="noopener noreferrer" className="text-white hover:text-red-500" aria-label="Facebook" data-testid="header-fb"><Facebook className="w-4 h-4" /></a>
-              <a href="https://www.instagram.com/bennouri_auto?igsh=MWxleDN1bW41NHhwdg==" target="_blank" rel="noopener noreferrer" className="text-white hover:text-red-500" aria-label="Instagram"><Instagram className="w-4 h-4" /></a>
-              <a href="https://www.tiktok.com/@bennouri_piece_auto?_r=1&_t=ZS-977PCfpZzRS" target="_blank" rel="noopener noreferrer" className="text-white hover:text-red-500" aria-label="TikTok" data-testid="header-wa"><TikTokIcon className="w-4 h-4" /></a>
-              <a href="https://wa.me/21650881000" target="_blank" rel="noopener noreferrer" className="text-white hover:text-red-500" aria-label="WhatsApp" data-testid="header-wa"><WhatsAppIcon className="w-4 h-4" /></a>
+          <div className="flex items-center gap-2.5 sm:gap-5 font-medium ml-auto">
+            <Link to="/a-propos" className="text-blue-900 hover:text-blue-500 transition-colors hidden sm:inline">À propos de nous</Link>
+            <Link to="/contact" className="text-blue-900 hover:text-blue-500 transition-colors whitespace-nowrap">Contactez-nous</Link>
+            <div className="flex items-center gap-2 sm:gap-3 pl-2 border-l border-blue-900/15">
+              <a href="https://www.facebook.com/profile.php?id=61575421658002" target="_blank" rel="noopener noreferrer" className="text-blue-900 hover:text-blue-500" aria-label="Facebook" data-testid="header-fb"><Facebook className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></a>
+              <a href="https://www.instagram.com/bennouri_auto?igsh=MWxleDN1bW41NHhwdg==" target="_blank" rel="noopener noreferrer" className="text-blue-900 hover:text-blue-500" aria-label="Instagram"><Instagram className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></a>
+              <a href="https://www.tiktok.com/@bennouri_piece_auto?_r=1&_t=ZS-977PCfpZzRS" target="_blank" rel="noopener noreferrer" className="text-blue-900 hover:text-blue-500" aria-label="TikTok" data-testid="header-wa"><TikTokIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></a>
+              <a href="https://wa.me/21650881000" target="_blank" rel="noopener noreferrer" className="text-blue-900 hover:text-blue-500" aria-label="WhatsApp" data-testid="header-wa"><WhatsAppIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" /></a>
             </div>
           </div>
         </div>
       </div>
 
       {/* Main header row */}
-<div className="bg-black">
-  <div className="px-[70px] py-4 grid grid-cols-[auto_1fr_auto] items-center gap-6">
-    
-    {/* Logo - links */}
-    <div className="flex justify-start">
-      <Link to="/" className="flex-shrink-0" data-testid="logo-link">
-  <img src="/new_logo.jpeg" alt="BENNOURI Pièces" className="h-16 sm:h-20 w-auto object-contain" />
-</Link>
-    </div>
+      <div className="bg-white">
+        <div className="px-4 sm:px-6 lg:px-[70px] py-2.5 sm:py-4 grid grid-cols-[auto_1fr_auto] items-center gap-3 sm:gap-6">
 
-    {/* Search bar - Mitte, nimmt jetzt den ganzen verbleibenden Platz */}
-  <div className="flex justify-center">
-  <form 
-    onSubmit={submitSearch} 
-    className="hidden md:flex w-full max-w-5xl bg-white rounded-full overflow-hidden shadow-md border border-white/10 focus-within:ring-2 focus-within:ring-red-500 transition-all"
-    data-testid="header-search"
-  >
-    <input
-      type="text"
-      value={q}
-      onChange={(e) => setQ(e.target.value)}
-      placeholder="Référence d'origine (ex: 813317, 96550057)…"
-      className="flex-1 px-5 py-3 text-sm text-black focus:outline-none font-mono-vin tracking-wider bg-transparent"
-      data-testid="header-search-input"
-    />
-    <button
-      type="submit"
-      className="bg-red-600 hover:bg-red-700 px-6 flex items-center justify-center transition-colors"
-      data-testid="header-search-btn"
-    >
-      <Search className="w-5 h-5 text-white" />
-    </button>
-  </form>
-</div>
-
-    {/* Account & cart - rechts */}
-    <div className="flex items-center justify-end gap-3 sm:gap-6 lg:gap-7">
-      {user ? (
-        <Link to="/compte" className="hidden sm:inline-flex items-center gap-2 text-white hover:text-red-500 transition-colors" data-testid="header-account">
-          <div className="w-10 h-10 rounded-full border border-white/40 flex items-center justify-center">
-            <User className="w-5 h-5 text-white" />
+          {/* Logo - links */}
+          <div className="flex justify-start min-w-0">
+            <Link to="/" className="flex-shrink-0" data-testid="logo-link">
+              <img src="/new_logo.png" alt="BENNOURI Pièces" className="h-11 sm:h-14 md:h-20 lg:h-24 w-auto object-contain" />
+            </Link>
           </div>
-          <div className="leading-tight">
-            <div className="text-[10px] uppercase tracking-wider text-white">Mon compte</div>
-            <div className="text-sm font-semibold flex items-center gap-1 text-white">{user.name?.split(" ")[0]} <ChevronDown className="w-3 h-3" /></div>
-          </div>
-        </Link>
-      ) : (
-        <Link to="/connexion" className="hidden sm:inline-flex items-center gap-2 text-white hover:text-red-500 text-sm font-semibold" data-testid="header-login">
-          <User className="w-5 h-5" /> Connexion
-        </Link>
-      )}
-      <Link to="/panier" className="relative inline-flex items-center gap-2 text-white" data-testid="header-cart">
-        <div className="relative w-10 h-10 rounded-full border border-white/40 flex items-center justify-center">
-          <ShoppingCart className="w-5 h-5 text-white" />
-          {count > 0 && (
-            <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center" data-testid="cart-count">{count}</span>
-          )}
-        </div>
-        <div className="hidden sm:block leading-tight">
-          <div className="text-[10px] uppercase tracking-wider text-white">Panier</div>
-          <div className="text-sm font-semibold text-white">{count} article{count !== 1 && "s"}</div>
-        </div>
-      </Link>
-      {user?.role === "admin" && (
-        <Link to="/admin" className="hidden lg:inline-flex items-center gap-1 text-xs text-white border border-white/20 hover:border-red-500 px-3 py-2 rounded-sm" data-testid="header-admin">
-          <Shield className="w-3.5 h-3.5" /> Admin
-        </Link>
-      )}
-      {user && (
-        <button onClick={logout} className="hidden xl:inline-flex items-center gap-1 text-xs text-white/70 hover:text-red-400" data-testid="header-logout">
-          <LogOut className="w-3.5 h-3.5" />
-        </button>
-      )}
-      <button
-        className="md:hidden text-white"
-        onClick={() => setOpen(!open)}
-        aria-label="Toggle menu"
-        data-testid="header-menu-toggle"
-      >
-        {open ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-      </button>
-    </div>
 
-  </div>
-</div>
+          {/* Search bar - Mitte, nimmt jetzt den ganzen verbleibenden Platz */}
+          <div className="flex justify-center min-w-0">
+            <form
+              onSubmit={submitSearch}
+              className="hidden md:flex w-full max-w-5xl bg-white rounded-full overflow-hidden shadow-md border border-blue-900/15 focus-within:ring-2 focus-within:ring-blue-400 transition-all"
+              data-testid="header-search"
+            >
+              <input
+                type="text"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                onFocus={handleSearchFocus}
+                placeholder="Référence d'origine (ex: 813317, 96550057)…"
+                className="flex-1 min-w-0 px-5 py-3 text-sm text-black focus:outline-none font-mono-vin tracking-wider bg-transparent"
+                data-testid="header-search-input"
+              />
+              <button
+                type="submit"
+                className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 px-6 flex items-center justify-center transition-colors"
+                data-testid="header-search-btn"
+              >
+                <Search className="w-5 h-5 text-white" />
+              </button>
+            </form>
+          </div>
+
+          {/* Account & cart - rechts */}
+          <div className="flex items-center justify-end gap-2.5 sm:gap-6 lg:gap-7">
+            {user ? (
+              <Link to="/compte" className="hidden sm:inline-flex items-center gap-2 text-blue-900 hover:text-blue-500 transition-colors" data-testid="header-account">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-blue-900/30 flex items-center justify-center flex-shrink-0">
+                  <User className="w-4 h-4 sm:w-5 sm:h-5 text-blue-900" />
+                </div>
+                <div className="leading-tight hidden lg:block">
+                  <div className="text-[10px] uppercase tracking-wider text-blue-900">Mon compte</div>
+                  <div className="text-sm font-semibold flex items-center gap-1 text-blue-900">{user.name?.split(" ")[0]} <ChevronDown className="w-3 h-3" /></div>
+                </div>
+              </Link>
+            ) : (
+              <Link to="/connexion" className="inline-flex items-center gap-2 text-blue-900 hover:text-blue-500 text-sm font-semibold" data-testid="header-login">
+                <User className="w-5 h-5 flex-shrink-0" />
+                <span className="hidden lg:inline">Connexion</span>
+              </Link>
+            )}
+            <Link to="/panier" className="relative inline-flex items-center gap-2 text-blue-900" data-testid="header-cart">
+              <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-blue-900/30 flex items-center justify-center flex-shrink-0">
+                <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 text-blue-900" />
+                {count > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-blue-900 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center" data-testid="cart-count">{count}</span>
+                )}
+              </div>
+              <div className="hidden lg:block leading-tight">
+                <div className="text-[10px] uppercase tracking-wider text-blue-900">Panier</div>
+                <div className="text-sm font-semibold text-blue-900">{count} article{count !== 1 && "s"}</div>
+              </div>
+            </Link>
+            {user?.role === "admin" && (
+              <Link to="/admin" className="hidden lg:inline-flex items-center gap-1 text-xs text-blue-900 border border-blue-900/20 hover:border-blue-900 px-3 py-2 rounded-sm" data-testid="header-admin">
+                <Shield className="w-3.5 h-3.5" /> Admin
+              </Link>
+            )}
+            {user && (
+              <button onClick={logout} className="hidden xl:inline-flex items-center gap-1 text-xs text-blue-900/70 hover:text-blue-900" data-testid="header-logout">
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <button
+              className="md:hidden text-blue-900 flex-shrink-0"
+              onClick={() => setOpen(!open)}
+              aria-label="Toggle menu"
+              data-testid="header-menu-toggle"
+            >
+              {open ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+          </div>
+
+        </div>
+      </div>
 
       {/* Mobile menu */}
       {open && (
-        <div className="md:hidden bg-black border-t border-white/10" data-testid="mobile-menu">
-          <form onSubmit={submitSearch} className="p-4 border-b border-white/10">
-            <div className="flex bg-white rounded-sm overflow-hidden">
+        <div className="md:hidden bg-white border-t border-blue-900/10" data-testid="mobile-menu">
+          <form onSubmit={submitSearch} className="p-4 border-b border-blue-900/10">
+            <div className="flex bg-white border border-blue-900/15 rounded-sm overflow-hidden">
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
+                onFocus={handleSearchFocus}
                 placeholder="Rechercher..."
-                className="flex-1 px-3 py-2 text-sm text-black focus:outline-none"
+                className="flex-1 min-w-0 px-3 py-2 text-sm text-black focus:outline-none"
               />
-              <button type="submit" className="bg-red-600 px-4">
+              <button type="submit" className="flex-shrink-0 bg-blue-600 px-4">
                 <Search className="w-4 h-4 text-white" />
               </button>
             </div>
           </form>
           <div className="px-4 py-3 space-y-2">
+            <Link to="/a-propos" onClick={() => setOpen(false)} className="block py-2 text-blue-900 font-semibold">À propos de nous</Link>
             {user ? (
               <>
-                <Link to="/compte" onClick={() => setOpen(false)} className="block py-2 text-white">Mon compte</Link>
-                <button onClick={() => { logout(); setOpen(false); }} className="block w-full text-left py-2 text-red-400">Déconnexion</button>
+                <Link to="/compte" onClick={() => setOpen(false)} className="block py-2 text-blue-900">Mon compte</Link>
+                {user.role === "admin" && (
+                  <Link to="/admin" onClick={() => setOpen(false)} className="block py-2 text-blue-900">Admin</Link>
+                )}
+                <button onClick={() => { logout(); setOpen(false); }} className="block w-full text-left py-2 text-blue-900/70">Déconnexion</button>
               </>
             ) : (
-              <Link to="/connexion" onClick={() => setOpen(false)} className="block py-2 text-red-400 font-semibold">Connexion</Link>
+              <Link to="/connexion" onClick={() => setOpen(false)} className="block py-2 text-blue-900 font-semibold">Connexion</Link>
             )}
           </div>
         </div>

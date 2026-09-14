@@ -30,6 +30,7 @@ import Impressum from "@/pages/Impressum";
 import NotFound from "@/pages/NotFound";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
+import ConditionsGeneralesVente from "@/pages/ConditionsGeneralesVente";
 
 function Layout({ children }) {
   return (
@@ -60,6 +61,7 @@ export default function App() {
               <Route path="/contact" element={<Contact />} />
               <Route path="/impressum" element={<Impressum />} />
               <Route path="/panier" element={<Cart />} />
+              <Route path="/conditions-generales-vente" element={<ConditionsGeneralesVente />} />
               <Route
                 path="/commande"
                 element={

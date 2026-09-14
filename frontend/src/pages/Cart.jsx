@@ -53,9 +53,13 @@ useEffect(() => {
           <ShoppingCart className="w-16 h-16 text-slate-300 mx-auto mb-4" />
           <h2 className="font-display text-2xl font-bold text-slate-900">Votre panier est vide</h2>
           <p className="text-slate-500 mt-2">Trouvez vos pièces grâce au numéro VIN.</p>
-          <Link to="/recherche-vin" className="bn-btn-primary inline-flex mt-6" data-testid="cart-go-vin">
-            Rechercher par VIN
-          </Link>
+          <Link
+  to="/"
+  className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-sm transition-colors mt-6"
+  data-testid="cart-go-vin"
+>
+  Rechercher par VIN
+</Link>
         </div>
       </div>
     );
@@ -67,7 +71,7 @@ useEffect(() => {
         <h1 className="font-display text-3xl sm:text-4xl font-black text-slate-900 tracking-tight uppercase">
           Votre panier
         </h1>
-        <Link to="/" className="hidden sm:inline-flex items-center gap-1 text-sm text-slate-600 hover:text-red-600 font-semibold">
+        <Link to="/" className="hidden sm:inline-flex items-center gap-1 text-sm text-slate-600 hover:text-blue-600 font-semibold">
           <ArrowLeft className="w-4 h-4" /> Continuer mes achats
         </Link>
       </div>
@@ -105,7 +109,7 @@ useEffect(() => {
     const lookupRef = p.oemRef || p.ref;
     const url = images[lookupRef];
     if (url === undefined) {
-      return <div className="w-4 h-4 border-2 border-slate-300 border-t-red-600 rounded-full animate-spin" />;
+      return <div className="w-4 h-4 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin" />;
     }
     if (!url || imgErrors[lookupRef]) {
       return <ShoppingCart className="w-6 h-6 text-slate-300" />;
@@ -122,7 +126,7 @@ useEffect(() => {
   })()}
 </div>
                   <div className="min-w-0">
-                    <div className="font-display font-bold text-slate-900 text-sm sm:text-base leading-tight group-hover:text-red-600 transition-colors" data-testid={`cart-name-${p.ref}`}>{p.name}</div>
+                    <div className="font-display font-bold text-slate-900 text-sm sm:text-base leading-tight group-hover:text-blue-600 transition-colors" data-testid={`cart-name-${p.ref}`}>{p.name}</div>
                     <div className="text-xs text-slate-500 mt-0.5"><span className="font-mono-vin">{p.ref}</span></div>
                     {/* Mobile: price + qty inline (stop propagation so it doesn't navigate) */}
                     <div className="md:hidden mt-2 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
@@ -151,7 +155,7 @@ useEffect(() => {
                 </div>
                 <button
                   onClick={(e) => { e.stopPropagation(); remove(p.ref); }}
-                  className="text-slate-400 hover:text-red-600 justify-self-end"
+                  className="text-slate-400 hover:text-blue-600 justify-self-end"
                   aria-label="Supprimer"
                   data-testid={`cart-remove-${p.ref}`}
                 >
@@ -168,10 +172,10 @@ useEffect(() => {
               <input
                 type="text"
                 placeholder="Entrez votre code"
-                className="flex-1 px-3 py-2.5 text-sm text-slate-900 border border-slate-300 rounded-sm focus:outline-none focus:border-red-500"
+                className="flex-1 px-3 py-2.5 text-sm text-slate-900 border border-slate-300 rounded-sm focus:outline-none focus:border-blue-500"
                 data-testid="promo-input"
               />
-              <button className="bg-slate-900 hover:bg-black text-white font-bold uppercase text-xs tracking-wider px-5 py-2.5 rounded-sm" data-testid="promo-apply">
+              <button className="bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase text-xs tracking-wider px-5 py-2.5 rounded-sm" data-testid="promo-apply">
                 Appliquer
               </button>
             </div>
@@ -194,26 +198,26 @@ useEffect(() => {
               </div>
               {!freeShipping && (
                 <div className="text-[11px] text-slate-500 italic">
-                  Livraison gratuite à partir de <span className="font-bold text-red-600">{FREE_SHIPPING_THRESHOLD} DT</span>
+                  Livraison gratuite à partir de <span className="font-bold text-blue-600">{FREE_SHIPPING_THRESHOLD} DT</span>
                   <div className="mt-1 h-1 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-red-500" style={{ width: `${Math.min(100, (total / FREE_SHIPPING_THRESHOLD) * 100)}%` }} />
+                    <div className="h-full bg-blue-500" style={{ width: `${Math.min(100, (total / FREE_SHIPPING_THRESHOLD) * 100)}%` }} />
                   </div>
                 </div>
               )}
               <div className="border-t border-slate-200 pt-3 flex items-center justify-between">
                 <span className="font-display font-black text-slate-900 uppercase">Total</span>
-                <span className="font-display font-black text-2xl text-red-600" data-testid="cart-total">{formatPrice(total)}</span>
+                <span className="font-display font-black text-2xl text-blue-600" data-testid="cart-total">{formatPrice(total)}</span>
               </div>
             </div>
 
             <button
               onClick={() => navigate("/commande")}
-              className="mt-6 w-full bg-red-600 hover:bg-red-700 text-white font-black uppercase text-sm tracking-wider px-6 py-3.5 rounded-sm transition-colors shadow-lg shadow-red-900/30"
+              className="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white font-black uppercase text-sm tracking-wider px-6 py-3.5 rounded-sm transition-colors shadow-lg shadow-blue-900/30"
               data-testid="cart-checkout-btn"
             >
               Passer la commande →
             </button>
-            <Link to="/" className="mt-3 block text-center text-xs text-slate-500 hover:text-red-600 font-semibold">
+            <Link to="/" className="mt-3 block text-center text-xs text-slate-500 hover:text-blue-600 font-semibold">
               ← Continuer mes achats
             </Link>
           </div>
@@ -228,7 +232,7 @@ useEffect(() => {
           { Icon: ShieldCheck, title: "Produits originaux", sub: "Qualité garantie" },
         ].map((b) => (
           <div key={b.title} className="flex items-center gap-3">
-            <div className="w-10 h-10 border-2 border-red-600 text-red-600 flex items-center justify-center rounded-sm">
+            <div className="w-10 h-10 border-2 border-blue-600 text-blue-600 flex items-center justify-center rounded-sm">
               <b.Icon className="w-5 h-5" />
             </div>
             <div>

@@ -65,7 +65,7 @@ export default function Checkout() {
     return (
       <div className="max-w-3xl mx-auto px-4 py-16 text-center" data-testid="checkout-empty">
         <p className="text-slate-500 mb-4">Votre panier est vide.</p>
-        <Link to="/" className="text-red-600 font-semibold hover:underline">← Retour à l&apos;accueil</Link>
+        <Link to="/" className="text-blue-600 font-semibold hover:underline">← Retour à l&apos;accueil</Link>
       </div>
     );
   }
@@ -117,9 +117,9 @@ export default function Checkout() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" data-testid="checkout-page">
       {/* Breadcrumb */}
       <div className="text-xs text-slate-500 mb-6 flex items-center gap-1.5 font-semibold">
-        <Link to="/" className="hover:text-red-600">Accueil</Link>
+        <Link to="/" className="hover:text-blue-600">Accueil</Link>
         <span>›</span>
-        <Link to="/panier" className="hover:text-red-600">Panier</Link>
+        <Link to="/panier" className="hover:text-blue-600">Panier</Link>
         <span>›</span>
         <span className="text-slate-900">Commande</span>
       </div>
@@ -129,7 +129,7 @@ export default function Checkout() {
         <div className="lg:col-span-1 space-y-5">
           <div className="bg-white border border-slate-200 rounded-sm p-6">
             <h2 className="font-display font-black text-slate-900 uppercase text-sm tracking-wider mb-4 flex items-center gap-2">
-              <span className="w-1 h-5 bg-red-600 inline-block" /> Informations de livraison
+              <span className="w-1 h-5 bg-blue-600 inline-block" /> Informations de livraison
             </h2>
             <div className="space-y-4">
               <div>
@@ -139,7 +139,7 @@ export default function Checkout() {
                   <input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 text-sm text-slate-900 border border-slate-300 rounded-sm focus:outline-none focus:border-red-500"
+                    className="w-full pl-9 pr-3 py-2.5 text-sm text-slate-900 border border-slate-300 rounded-sm focus:outline-none focus:border-blue-500"
                     placeholder="Ahmed Ben Ali"
                     required
                     data-testid="checkout-name"
@@ -153,7 +153,7 @@ export default function Checkout() {
                   <input
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 text-sm text-slate-900 border border-slate-300 rounded-sm focus:outline-none focus:border-red-500"
+                    className="w-full pl-9 pr-3 py-2.5 text-sm text-slate-900 border border-slate-300 rounded-sm focus:outline-none focus:border-blue-500"
                     placeholder="+216 99 123 456"
                     required
                     data-testid="checkout-phone"
@@ -166,7 +166,7 @@ export default function Checkout() {
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                   rows={2}
-                  className="w-full px-3 py-2.5 text-sm text-slate-900 border border-slate-300 rounded-sm focus:outline-none focus:border-red-500"
+                  className="w-full px-3 py-2.5 text-sm text-slate-900 border border-slate-300 rounded-sm focus:outline-none focus:border-blue-500"
                   placeholder="Rue Mohamed V, Tunis 1002, Tunisie"
                   required
                   data-testid="checkout-address"
@@ -178,7 +178,7 @@ export default function Checkout() {
                   <input
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
-                    className="w-full px-3 py-2.5 text-sm text-slate-900 border border-slate-300 rounded-sm focus:outline-none focus:border-red-500"
+                    className="w-full px-3 py-2.5 text-sm text-slate-900 border border-slate-300 rounded-sm focus:outline-none focus:border-blue-500"
                     placeholder="Tunis"
                     data-testid="checkout-city"
                   />
@@ -188,7 +188,7 @@ export default function Checkout() {
                   <input
                     value={postal}
                     onChange={(e) => setPostal(e.target.value)}
-                    className="w-full px-3 py-2.5 text-sm text-slate-900 border border-slate-300 rounded-sm focus:outline-none focus:border-red-500"
+                    className="w-full px-3 py-2.5 text-sm text-slate-900 border border-slate-300 rounded-sm focus:outline-none focus:border-blue-500"
                     placeholder="1002"
                     data-testid="checkout-postal"
                   />
@@ -202,7 +202,7 @@ export default function Checkout() {
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     rows={2}
-                    className="w-full pl-9 pr-3 py-2.5 text-sm text-slate-900 border border-slate-300 rounded-sm focus:outline-none focus:border-red-500"
+                    className="w-full pl-9 pr-3 py-2.5 text-sm text-slate-900 border border-slate-300 rounded-sm focus:outline-none focus:border-blue-500"
                     placeholder="Informations complémentaires…"
                     data-testid="checkout-notes"
                   />
@@ -217,7 +217,7 @@ export default function Checkout() {
           {/* Delivery method */}
           <div className="bg-white border border-slate-200 rounded-sm p-6">
             <h2 className="font-display font-black text-slate-900 uppercase text-sm tracking-wider mb-4 flex items-center gap-2">
-              <span className="w-1 h-5 bg-red-600 inline-block" /> Mode de livraison
+              <span className="w-1 h-5 bg-blue-600 inline-block" /> Mode de livraison
             </h2>
             <div className="space-y-3">
               {DELIVERY_OPTIONS.map((d) => {
@@ -226,7 +226,7 @@ export default function Checkout() {
                 return (
                   <label
                     key={d.code}
-                    className={`flex items-center gap-3 border rounded-sm p-3 cursor-pointer transition-all ${selected ? "border-red-600 bg-red-50/40 ring-2 ring-red-600/15" : "border-slate-200 hover:border-slate-400"}`}
+                    className={`flex items-center gap-3 border rounded-sm p-3 cursor-pointer transition-all ${selected ? "border-blue-600 bg-blue-50/40 ring-2 ring-blue-600/15" : "border-slate-200 hover:border-slate-400"}`}
                     data-testid={`delivery-opt-${d.code}`}
                   >
                     <input
@@ -235,9 +235,9 @@ export default function Checkout() {
                       value={d.code}
                       checked={selected}
                       onChange={() => setDeliveryCode(d.code)}
-                      className="w-4 h-4 accent-red-600"
+                      className="w-4 h-4 accent-blue-600"
                     />
-                    <d.Icon className={`w-5 h-5 ${selected ? "text-red-600" : "text-slate-500"}`} />
+                    <d.Icon className={`w-5 h-5 ${selected ? "text-blue-600" : "text-slate-500"}`} />
                     <div className="flex-1 min-w-0">
                       <div className="font-display font-bold text-sm text-slate-900">{d.title}</div>
                       <div className="text-xs text-slate-500">{d.sub}</div>
@@ -251,7 +251,7 @@ export default function Checkout() {
             </div>
             {total < FREE_SHIPPING_THRESHOLD && (
               <div className="mt-3 text-[11px] text-slate-500 bg-amber-50 border border-amber-200 rounded-sm px-3 py-2">
-                Astuce : Ajoutez <span className="font-bold text-red-600">{formatPrice(FREE_SHIPPING_THRESHOLD - total)}</span> pour bénéficier de la <strong>livraison à domicile gratuite</strong>.
+                Astuce : Ajoutez <span className="font-bold text-blue-600">{formatPrice(FREE_SHIPPING_THRESHOLD - total)}</span> pour bénéficier de la <strong>livraison à domicile gratuite</strong>.
               </div>
             )}
           </div>
@@ -259,7 +259,7 @@ export default function Checkout() {
    {/* Payment method */}
 <div className="bg-white border border-slate-200 rounded-sm p-6">
   <h2 className="font-display font-black text-slate-900 uppercase text-sm tracking-wider mb-4 flex items-center gap-2">
-    <span className="w-1 h-5 bg-red-600 inline-block" /> Mode de paiement
+    <span className="w-1 h-5 bg-blue-600 inline-block" /> Mode de paiement
   </h2>
   <div className="space-y-3">
     {PAYMENT_OPTIONS.map((p) => {
@@ -271,7 +271,7 @@ export default function Checkout() {
             p.disabled
               ? "border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed"
               : selected
-              ? "border-red-600 bg-red-50/40 ring-2 ring-red-600/15 cursor-pointer"
+              ? "border-blue-600 bg-blue-50/40 ring-2 ring-blue-600/15 cursor-pointer"
               : "border-slate-200 hover:border-slate-400 cursor-pointer"
           }`}
           data-testid={`payment-opt-${p.code}`}
@@ -283,9 +283,9 @@ export default function Checkout() {
             checked={selected}
             disabled={p.disabled}
             onChange={() => !p.disabled && setPaymentCode(p.code)}
-            className="w-4 h-4 accent-red-600 disabled:cursor-not-allowed"
+            className="w-4 h-4 accent-blue-600 disabled:cursor-not-allowed"
           />
-          <p.Icon className={`w-5 h-5 ${p.disabled ? "text-slate-400" : selected ? "text-red-600" : "text-slate-500"}`} />
+          <p.Icon className={`w-5 h-5 ${p.disabled ? "text-slate-400" : selected ? "text-blue-600" : "text-slate-500"}`} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <div className={`font-display font-bold text-sm ${p.disabled ? "text-slate-500" : "text-slate-900"}`}>{p.title}</div>
@@ -308,7 +308,7 @@ export default function Checkout() {
         <aside className="lg:col-span-1">
           <div className="bg-white border border-slate-200 rounded-sm p-6 sticky top-24" data-testid="checkout-summary">
             <h2 className="font-display font-black text-slate-900 uppercase text-sm tracking-wider mb-4 flex items-center gap-2">
-              <span className="w-1 h-5 bg-red-600 inline-block" /> Récapitulatif
+              <span className="w-1 h-5 bg-blue-600 inline-block" /> Récapitulatif
             </h2>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between text-slate-700">
@@ -323,23 +323,23 @@ export default function Checkout() {
               </div>
               <div className="border-t border-slate-200 pt-3 mt-2 flex items-center justify-between">
                 <span className="font-display font-black text-slate-900 uppercase">Total</span>
-                <span className="font-display font-black text-2xl text-red-600" data-testid="recap-total">{formatPrice(grandTotal)}</span>
+                <span className="font-display font-black text-2xl text-blue-600" data-testid="recap-total">{formatPrice(grandTotal)}</span>
               </div>
             </div>
 
             <div className="mt-4 text-[11px] text-slate-500 leading-relaxed">
-              En passant votre commande, vous acceptez nos <Link to="/impressum" className="text-red-600 hover:underline">Conditions générales de vente</Link>.
+              En passant votre commande, vous acceptez nos <Link to="/impressum" className="text-blue-600 hover:underline">Conditions générales de vente</Link>.
             </div>
 
             <button
               type="submit"
               disabled={submitting}
-              className="mt-5 w-full bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white font-black uppercase text-sm tracking-wider px-6 py-3.5 rounded-sm transition-colors shadow-lg shadow-red-900/30"
+              className="mt-5 w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-black uppercase text-sm tracking-wider px-6 py-3.5 rounded-sm transition-colors shadow-lg shadow-blue-900/30"
               data-testid="checkout-submit-btn"
             >
               {submitting ? "Confirmation..." : "Confirmer la commande"}
             </button>
-            <Link to="/panier" className="mt-3 inline-flex items-center justify-center gap-1 w-full text-xs text-slate-500 hover:text-red-600 font-semibold">
+            <Link to="/panier" className="mt-3 inline-flex items-center justify-center gap-1 w-full text-xs text-slate-500 hover:text-blue-600 font-semibold">
               <ChevronLeft className="w-3.5 h-3.5" /> Retour au panier
             </Link>
           </div>
@@ -354,7 +354,7 @@ export default function Checkout() {
           { Icon: BadgeCheck, title: "Satisfaction garantie", sub: "Service client 7j/7" },
         ].map((b) => (
           <div key={b.title} className="flex items-center gap-3">
-            <div className="w-10 h-10 border-2 border-red-600 text-red-600 flex items-center justify-center rounded-sm">
+            <div className="w-10 h-10 border-2 border-blue-600 text-blue-600 flex items-center justify-center rounded-sm">
               <b.Icon className="w-5 h-5" />
             </div>
             <div>

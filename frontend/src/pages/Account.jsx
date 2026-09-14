@@ -35,10 +35,10 @@ const STATUS_COLOR = {
 };
 
 const STAT_DEFS = [
-  { key: "orders", label: "Commandes", Icon: ShoppingBag, bg: "bg-red-50", iconColor: "text-red-600", link: "/compte/commandes" },
-  { key: "in_progress", label: "En cours", Icon: ClipboardCheck, bg: "bg-emerald-50", iconColor: "text-emerald-600", link: "/compte/commandes?status=encours" },
-  { key: "delivered", label: "Livrées", Icon: Truck, bg: "bg-sky-50", iconColor: "text-sky-600", link: "/compte/commandes?status=livrees" },
-  { key: "favorites", label: "Favoris", Icon: Heart, bg: "bg-amber-50", iconColor: "text-amber-600", link: "/compte/favoris" },
+  { key: "orders", label: "Commandes", Icon: ShoppingBag, bg: "bg-blue-50", iconColor: "text-blue-600", link: "" },
+  { key: "in_progress", label: "En cours", Icon: ClipboardCheck, bg: "bg-emerald-50", iconColor: "text-emerald-600", link: "" },
+  { key: "delivered", label: "Livrées", Icon: Truck, bg: "bg-sky-50", iconColor: "text-sky-600", link: "" },
+  { key: "favorites", label: "Favoris", Icon: Heart, bg: "bg-amber-50", iconColor: "text-amber-600", link: "" },
 ];
 
 const MENU = [
@@ -66,7 +66,7 @@ const RECOMMENDED = [
     reviews: 96,
     price: 245,
     Icon: BrakeDisc,
-    bg: "from-slate-200 via-slate-100 to-red-50",
+    bg: "from-slate-200 via-slate-100 to-blue-50",
   },
   {
     ref: "bosch-s5-a08",
@@ -106,7 +106,7 @@ const RECOMMENDED = [
     reviews: 89,
     price: 95,
     Icon: SparkPlug,
-    bg: "from-red-100 via-red-50 to-orange-50",
+    bg: "from-blue-100 via-blue-50 to-orange-50",
   },
 ];
 
@@ -116,7 +116,7 @@ const QUICK_CATEGORIES = [
     label: "Moteur",
     sub: "Pistons, joints, filtres",
     Icon: Engine,
-    bg: "from-red-600 via-red-700 to-red-900",
+    bg: "from-blue-600 via-blue-700 to-blue-900",
   },
   {
     key: "huiles",
@@ -159,7 +159,7 @@ function StatCard({ def, value, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="group relative overflow-hidden bg-white border border-slate-200/70 rounded-md p-5 hover:shadow-lg hover:-translate-y-0.5 hover:border-slate-300 transition-all text-left w-full"
+      className="group relative overflow-hidden bg-white border border-slate-200/70 rounded-md p-5 hover:shadow-lg hover:-translate-y-0.5 hover:border-blue-300 transition-all text-left w-full"
       data-testid={`stat-${def.key}`}
     >
       <div className={`absolute -top-4 -right-4 w-20 h-20 ${def.bg} rounded-full opacity-60 group-hover:scale-110 transition-transform`} />
@@ -170,7 +170,7 @@ function StatCard({ def, value, onClick }) {
         <div className="min-w-0 flex-1">
           <div className="text-xs text-slate-500 font-medium">{def.label}</div>
           <div className="font-display text-3xl font-bold text-slate-900 leading-none mt-1">{value}</div>
-          <div className="text-[11px] text-slate-400 mt-1 group-hover:text-red-600 transition-colors">
+          <div className="text-[11px] text-slate-400 mt-1 group-hover:text-blue-600 transition-colors">
             {def.key === "favorites" ? "Voir tous →" : "Voir toutes →"}
           </div>
         </div>
@@ -189,12 +189,10 @@ function QuickCategories() {
           className={`group relative h-36 overflow-hidden rounded-md border border-slate-200 bg-gradient-to-br ${c.bg} transition-all hover:shadow-xl hover:-translate-y-0.5`}
           data-testid={`category-${c.key}`}
         >
-          {/* Decorative grid */}
           <div className="absolute inset-0 opacity-[0.06]" style={{
             backgroundImage: "linear-gradient(rgba(255,255,255,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.6) 1px, transparent 1px)",
             backgroundSize: "24px 24px",
           }} />
-          {/* SVG icon, large in background */}
           <div className="absolute -right-4 -bottom-4 w-32 h-32 opacity-30 group-hover:opacity-50 group-hover:scale-110 transition-all duration-500">
             <c.Icon className="w-full h-full" />
           </div>
@@ -223,7 +221,7 @@ function RecommendedCarousel() {
           <button
             onClick={() => canPrev && setStart((s) => s - 1)}
             disabled={!canPrev}
-            className="w-8 h-8 border border-slate-200 rounded-sm flex items-center justify-center hover:bg-slate-50 disabled:opacity-30"
+            className="w-8 h-8 border border-slate-200 rounded-sm flex items-center justify-center hover:bg-blue-50 disabled:opacity-30"
             data-testid="reco-prev"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -231,7 +229,7 @@ function RecommendedCarousel() {
           <button
             onClick={() => canNext && setStart((s) => s + 1)}
             disabled={!canNext}
-            className="w-8 h-8 border border-slate-200 rounded-sm flex items-center justify-center hover:bg-slate-50 disabled:opacity-30"
+            className="w-8 h-8 border border-slate-200 rounded-sm flex items-center justify-center hover:bg-blue-50 disabled:opacity-30"
             data-testid="reco-next"
           >
             <ChevronRight className="w-4 h-4" />
@@ -241,7 +239,7 @@ function RecommendedCarousel() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {slice.map((p) => (
-          <div key={p.ref} className="group border border-slate-100 rounded-md overflow-hidden hover:shadow-md hover:border-slate-200 hover:-translate-y-0.5 transition-all bg-white">
+          <div key={p.ref} className="group border border-slate-100 rounded-md overflow-hidden hover:shadow-md hover:border-blue-200 hover:-translate-y-0.5 transition-all bg-white">
             <div className={`relative h-40 bg-gradient-to-br ${p.bg} flex items-center justify-center overflow-hidden p-3`}>
               <div className="absolute top-2 right-2 bg-white/95 backdrop-blur-sm px-2 py-0.5 rounded-sm text-[9px] font-bold text-slate-700 shadow-sm">
                 NEUF
@@ -258,7 +256,7 @@ function RecommendedCarousel() {
               <div className="flex items-center justify-between mt-2">
                 <span className="font-bold text-slate-900 text-sm">{p.price.toFixed(3).replace(".", ",")} DT</span>
                 <button
-                  className="bg-red-600 hover:bg-red-700 text-white p-1.5 rounded-sm transition-colors shadow-sm"
+                  className="bg-blue-600 hover:bg-blue-700 text-white p-1.5 rounded-sm transition-colors shadow-sm"
                   aria-label="Ajouter au panier"
                   data-testid={`reco-add-${p.ref}`}
                 >
@@ -286,12 +284,11 @@ function DashboardView({ user, orders, setView }) {
   return (
     <>
       {/* Hero banner */}
-      <div className="relative overflow-hidden rounded-md mb-6 border border-slate-200 bg-gradient-to-r from-slate-900 via-slate-800 to-red-950" data-testid="hero-banner">
+      <div className="relative overflow-hidden rounded-md mb-6 border border-blue-100 bg-gradient-to-r from-blue-600 via-blue-700 to-blue-900" data-testid="hero-banner">
         <div className="absolute inset-0 opacity-[0.08]" style={{
           backgroundImage: "linear-gradient(rgba(255,255,255,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.4) 1px, transparent 1px)",
           backgroundSize: "40px 40px",
         }} />
-        {/* Decorative product icons on the right */}
         <div className="absolute -right-8 top-1/2 -translate-y-1/2 hidden md:flex items-center gap-3 opacity-25">
           <div className="w-28 h-28">
             <Engine className="w-full h-full" />
@@ -303,23 +300,22 @@ function DashboardView({ user, orders, setView }) {
             <OilBottle className="w-full h-full" />
           </div>
         </div>
-        {/* Soft red glow */}
-        <div className="absolute -right-20 top-1/2 -translate-y-1/2 w-96 h-96 bg-red-600/20 rounded-full blur-3xl" />
+        <div className="absolute -right-20 top-1/2 -translate-y-1/2 w-96 h-96 bg-white/10 rounded-full blur-3xl" />
         <div className="relative px-6 sm:px-10 py-8 sm:py-10 text-white flex flex-col sm:flex-row sm:items-center gap-6">
           <div className="flex-1 min-w-0">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.4em] text-red-400 mb-2">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.4em] text-blue-200 mb-2">
               Bienvenue
             </div>
             <h2 className="font-display text-2xl sm:text-3xl font-bold leading-tight mb-2">
-              Bonjour, <span className="text-red-400">{user?.name?.split(" ")[0] || "Cher client"}</span>
+              Bonjour, <span className="text-blue-200">{user?.name?.split(" ")[0] || "Cher client"}</span>
             </h2>
-            <p className="text-slate-200/80 text-sm max-w-xl">
+            <p className="text-blue-50/80 text-sm max-w-xl">
               Retrouvez toutes vos commandes, vos pièces favorites et vos informations en un seul endroit.
             </p>
           </div>
           <Link
-            to="/recherche-vin"
-            className="relative z-10 flex-shrink-0 inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold px-5 py-3 rounded-sm transition-colors text-sm shadow-lg shadow-red-900/40"
+            to="/"
+            className="relative z-10 flex-shrink-0 inline-flex items-center gap-2 bg-white hover:bg-blue-50 text-blue-700 font-semibold px-5 py-3 rounded-sm transition-colors text-sm shadow-lg shadow-blue-950/20"
             data-testid="hero-cta"
           >
             Rechercher une pièce <ChevronRight className="w-4 h-4" />
@@ -330,7 +326,7 @@ function DashboardView({ user, orders, setView }) {
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {STAT_DEFS.map((d) => (
-          <StatCard key={d.key} def={d} value={stats[d.key] ?? 0} onClick={() => setView(d.view)} />
+          <StatCard key={d.key} def={d} value={stats[d.key] ?? 0} />
         ))}
       </div>
 
@@ -340,7 +336,7 @@ function DashboardView({ user, orders, setView }) {
         <div className="bg-white border border-slate-100 rounded-md p-6" data-testid="last-order-card">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-display text-lg font-bold text-slate-900">Ma dernière commande</h3>
-            <button onClick={() => setView("orders")} className="text-xs font-semibold text-red-600 hover:text-red-700" data-testid="see-all-orders">
+            <button onClick={() => setView("orders")} className="text-xs font-semibold text-blue-600 hover:text-blue-700" data-testid="see-all-orders">
               Voir toutes mes commandes →
             </button>
           </div>
@@ -395,9 +391,7 @@ function DashboardView({ user, orders, setView }) {
                     ? `Livrée le ${new Date(lastOrder.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })}`
                     : "En préparation"}
                 </span>
-                <button className="inline-flex items-center gap-1 text-red-600 hover:text-red-700 font-semibold text-xs px-3 py-1.5 border border-slate-200 rounded-sm">
-                  Détails de la commande <ChevronRight className="w-3 h-3" />
-                </button>
+              
               </div>
             </div>
           )}
@@ -407,35 +401,32 @@ function DashboardView({ user, orders, setView }) {
         <div className="bg-white border border-slate-100 rounded-md p-6" data-testid="account-info-card">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-display text-lg font-bold text-slate-900">Informations du compte</h3>
-            <button className="text-xs font-semibold text-slate-700 hover:text-slate-900 border border-slate-200 px-3 py-1.5 rounded-sm inline-flex items-center gap-1">
-              <Edit2 className="w-3 h-3" /> Modifier
-            </button>
           </div>
 
           <div className="space-y-5">
             <div className="flex gap-3">
-              <UserCircle className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
+              <UserCircle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
               <div>
                 <div className="text-xs text-slate-500">Nom complet</div>
                 <div className="font-semibold text-slate-900">{user?.name || "—"}</div>
               </div>
             </div>
             <div className="flex gap-3">
-              <Mail className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
+              <Mail className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
               <div className="min-w-0">
                 <div className="text-xs text-slate-500">Email</div>
                 <div className="font-semibold text-slate-900 truncate">{user?.email}</div>
               </div>
             </div>
             <div className="flex gap-3">
-              <Phone className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
+              <Phone className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
               <div>
                 <div className="text-xs text-slate-500">Téléphone</div>
                 <div className="font-semibold text-slate-900">{user?.phone || "—"}</div>
               </div>
             </div>
             <div className="flex gap-3">
-              <Calendar className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
+              <Calendar className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
               <div>
                 <div className="text-xs text-slate-500">Date d&apos;inscription</div>
                 <div className="font-semibold text-slate-900">
@@ -557,80 +548,77 @@ export default function Account() {
     <div className="bg-slate-50 min-h-screen" data-testid="espace-client-page">
       <div className="flex flex-col lg:flex-row min-h-screen">
         {/* Sidebar */}
-        <aside className="lg:w-72 bg-slate-900 text-white flex-shrink-0 flex flex-col" data-testid="account-sidebar">
-          {/* Profile block */}
-          <div className="p-6 border-b border-slate-800">
-            <div className="bg-slate-800/60 border border-slate-700/50 rounded-md p-4 flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full border-2 border-slate-600 flex items-center justify-center flex-shrink-0">
-                <UserCircle className="w-7 h-7 text-slate-400" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="font-semibold text-white truncate" data-testid="sidebar-username">{user?.name || "—"}</div>
-                <div className="text-[11px] text-slate-400 mt-0.5">
-                  Client depuis : <span className="text-slate-300">{memberSince}</span>
-                </div>
-                <span className="inline-block mt-1.5 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-red-600/20 text-red-300 rounded-sm border border-red-500/30">
-                  Client fidèle
-                </span>
-              </div>
-            </div>
-          </div>
+      <aside className="lg:w-72 bg-white text-slate-900 border-r border-slate-200 flex-shrink-0 flex flex-col" data-testid="account-sidebar">
+  {/* Profile block */}
+  <div className="p-6 border-b border-slate-200">
+    <div className="bg-blue-50 border border-blue-100 rounded-md p-4 flex items-center gap-3">
+      <div className="w-12 h-12 rounded-full border-2 border-blue-200 flex items-center justify-center flex-shrink-0">
+        <UserCircle className="w-7 h-7 text-blue-500" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="font-semibold text-slate-900 truncate" data-testid="sidebar-username">{user?.name || "—"}</div>
+        <div className="text-[11px] text-slate-500 mt-0.5">
+          Client depuis : <span className="text-slate-700">{memberSince}</span>
+        </div>
+        <span className="inline-block mt-1.5 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-blue-100 text-blue-700 rounded-sm border border-blue-200">
+          Client fidèle
+        </span>
+      </div>
+    </div>
+  </div>
 
-          {/* Menu */}
-          <nav className="flex-1 p-4 space-y-1" data-testid="account-menu">
-            {MENU.map((m) => {
-              const isActive = view === m.view;
-              return (
-                <button
-                  key={m.key}
-                  onClick={() => setView(m.view)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-sm text-sm font-medium transition-all ${
-                    isActive
-                      ? "bg-red-600 text-white shadow-md"
-                      : "text-slate-300 hover:bg-slate-800 hover:text-white"
-                  }`}
-                  data-testid={`menu-${m.key}`}
-                >
-                  <m.Icon className="w-4 h-4 flex-shrink-0" />
-                  <span className="truncate">{m.label}</span>
-                </button>
-              );
-            })}
+  {/* Menu */}
+  <nav className="flex-1 p-4 space-y-1" data-testid="account-menu">
+    {MENU.map((m) => {
+      const isActive = view === m.view;
+      return (
+        <button
+          key={m.key}
+          onClick={() => setView(m.view)}
+          className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-sm text-sm font-medium transition-all ${
+            isActive
+              ? "bg-blue-600 text-white shadow-md"
+              : "text-slate-600 hover:bg-blue-50 hover:text-blue-700"
+          }`}
+          data-testid={`menu-${m.key}`}
+        >
+          <m.Icon className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{m.label}</span>
+        </button>
+      );
+    })}
 
-            <div className="pt-3 mt-3 border-t border-slate-800">
-              <button
-                onClick={handleLogout}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-sm text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
-                data-testid="menu-logout"
-              >
-                <LogOut className="w-4 h-4" />
-                Déconnexion
-              </button>
-            </div>
-          </nav>
+    <div className="pt-3 mt-3 border-t border-slate-200">
+      <button
+        onClick={handleLogout}
+        className="w-full flex items-center gap-3 px-4 py-2.5 rounded-sm text-sm font-medium text-slate-600 hover:bg-blue-50 hover:text-blue-700 transition-all"
+        data-testid="menu-logout"
+      >
+        <LogOut className="w-4 h-4" />
+        Déconnexion
+      </button>
+    </div>
+  </nav>
 
-          {/* Help block */}
-          <div className="p-4 border-t border-slate-800">
-            <div className="bg-slate-800/40 border border-slate-700/50 rounded-md p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Headphones className="w-5 h-5 text-red-400" />
-                <h4 className="font-semibold text-white text-sm">Besoin d&apos;aide ?</h4>
-              </div>
-              <p className="text-[11px] text-slate-400 mb-2 leading-relaxed">
-                Notre service client est à votre disposition
-              </p>
-              <a
-                href="tel:+21671123456"
-                className="block text-red-400 hover:text-red-300 font-bold text-sm font-mono"
-              >
-                +216 54 643 643
-              </a>
-              <div className="text-[10px] text-slate-500 mt-1">
-                Lun - Sam : 08h00 - 18h00
-              </div>
-            </div>
-          </div>
-        </aside>
+  {/* Help block */}
+  <div className="p-4 border-t border-slate-200">
+    <div className="bg-blue-50 border border-blue-100 rounded-md p-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Headphones className="w-5 h-5 text-blue-600" />
+        <h4 className="font-semibold text-slate-900 text-sm">Besoin d&apos;aide ?</h4>
+      </div>
+      <p className="text-[11px] text-slate-500 mb-2 leading-relaxed">
+        Notre service client est à votre disposition
+      </p>
+      <a
+        href="tel:+21671123456"
+        className="block text-blue-600 hover:text-blue-700 font-bold text-sm font-mono"
+      >
+        +216 54 643 643
+      </a>
+    </div>
+  </div>
+</aside>
 
         {/* Main content */}
         <main className="flex-1 p-6 lg:p-10 overflow-auto">
@@ -640,7 +628,7 @@ export default function Account() {
                 Espace client
               </h1>
               <nav className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
-                <Link to="/" className="hover:text-red-600">Accueil</Link>
+                <Link to="/" className="hover:text-blue-600">Accueil</Link>
                 <ChevronRight className="w-3 h-3" />
                 <span className="text-slate-700">Espace client</span>
               </nav>

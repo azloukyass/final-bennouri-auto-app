@@ -6,9 +6,9 @@ import { toast } from "sonner";
 import { useCart } from "@/context/CartContext";
 
 const SECTION_META = {
-  mecanique: { label: "Mécanique", bar: "from-red-700 to-red-500", color: "text-red-600" },
-  electrique: { label: "Électrique", bar: "from-amber-600 to-amber-400", color: "text-amber-600" },
-  carrosserie: { label: "Carrosserie", bar: "from-slate-700 to-slate-500", color: "text-slate-700" },
+  mecanique: { label: "Mécanique", bar: "from-blue-700 to-blue-500", color: "text-blue-600" },
+  electrique: { label: "Électrique", bar: "from-blue-700 to-blue-500", color: "text-blue-600" },
+  carrosserie: { label: "Carrosserie", bar: "from-blue-700 to-blue-500", color: "text-blue-600" },
 };
 
 export default function CategoryTree() {
@@ -62,7 +62,7 @@ export default function CategoryTree() {
       <div className="max-w-3xl mx-auto px-4 py-16 text-center">
         <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
         <p className="text-sm text-slate-500 mb-4">{error || "Catégorie introuvable."}</p>
-        <button onClick={() => navigate(-1)} className="text-red-600 hover:underline font-semibold">← Retour</button>
+        <button onClick={() => navigate(-1)} className="text-blue-600 hover:underline font-semibold">← Retour</button>
       </div>
     );
   }
@@ -78,7 +78,7 @@ export default function CategoryTree() {
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <Breadcrumb section={section} sectionLabel={meta.label} breadcrumb={data.breadcrumb} />
-          <div className="text-[10px] font-bold uppercase tracking-[0.35em] text-red-600 mt-4 mb-2">Catégorie</div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.35em] text-blue-600 mt-4 mb-2">Catégorie</div>
           <h1 className={`font-display text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight uppercase ${meta.color}`} data-testid="tree-node-title">
             {data.label}
           </h1>
@@ -99,29 +99,36 @@ export default function CategoryTree() {
                 <Link
                   key={child.slug}
                   to={buildChildPath(child.slug)}
-                  className="group bg-white border border-slate-200 hover:border-red-500 hover:shadow-lg transition-all rounded-sm overflow-hidden"
+                  className="group bg-white border border-slate-200 hover:border-blue-600 hover:shadow-lg transition-all rounded-sm overflow-hidden"
                   data-testid={`tree-child-${child.slug}`}
                 >
                   <div className={`h-1.5 bg-gradient-to-r ${meta.bar}`} />
                   <div className="p-5 flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-sm bg-red-50 group-hover:bg-red-600 flex items-center justify-center flex-shrink-0 transition-colors">
-                      {childHasMore ? (
-                        <Layers className="w-5 h-5 text-red-600 group-hover:text-white transition-colors" />
-                      ) : (
-                        <Package className="w-5 h-5 text-red-600 group-hover:text-white transition-colors" />
-                      )}
-                    </div>
+<div className="w-20 h-20 rounded-sm bg-blue-50 flex items-center justify-center flex-shrink-0 overflow-hidden">
+  {child.image ? (
+    <img
+      src={child.image}
+      alt={child.label}
+      className="w-full h-full object-contain p-1.5"
+      onError={(e) => { e.target.style.display = "none"; }}
+    />
+  ) : childHasMore ? (
+    <Layers className="w-8 h-8 text-blue-600 transition-colors" />
+  ) : (
+    <Package className="w-8 h-8 text-blue-600 transition-colors" />
+  )}
+</div>
                     <div className="flex-1 min-w-0">
                       <div className="font-display font-black text-slate-900 text-base leading-tight uppercase">
                         {child.label}
                       </div>
-                      <div className="mt-1 text-[11px] uppercase tracking-wider font-semibold text-slate-400 group-hover:text-red-600 transition-colors">
+                      <div className="mt-1 text-[11px] uppercase tracking-wider font-semibold text-slate-400 group-hover:text-blue-600 transition-colors">
                         {childHasMore
                           ? `${child.children.length} sous-${child.children.length > 1 ? "catégories" : "catégorie"} →`
                           : "Voir les pièces →"}
                       </div>
                     </div>
-                    <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-red-600 group-hover:translate-x-1 transition-all flex-shrink-0" />
+                    <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-1 transition-all flex-shrink-0" />
                   </div>
                 </Link>
               );
@@ -156,7 +163,7 @@ function LeafPanel({ label, searchKeyword, splitKeywords, vehicle, navigate }) {
   if (vehicle?.vin) {
     return (
       <div className="bg-white border border-slate-200 rounded-sm p-12 text-center" data-testid="tree-leaf-redirecting">
-        <Loader2 className="w-8 h-8 text-red-600 mx-auto mb-3 animate-spin" />
+        <Loader2 className="w-8 h-8 text-blue-600 mx-auto mb-3 animate-spin" />
         <p className="text-sm text-slate-500">Recherche &ldquo;{label}&rdquo; pour {vehicle.make} {vehicle.model}…</p>
       </div>
     );
@@ -175,12 +182,12 @@ function LeafPanel({ label, searchKeyword, splitKeywords, vehicle, navigate }) {
   return (
     <div className="bg-white border border-slate-200 rounded-sm overflow-hidden" data-testid="tree-leaf-placeholder">
       {/* Hero header */}
-      <div className="bg-gradient-to-r from-black via-zinc-900 to-red-900 px-8 py-8 relative overflow-hidden">
-        <div className="absolute -right-20 top-1/2 -translate-y-1/2 w-72 h-72 bg-red-600/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="bg-gradient-to-r from-black via-zinc-900 to-blue-900 px-8 py-8 relative overflow-hidden">
+        <div className="absolute -right-20 top-1/2 -translate-y-1/2 w-72 h-72 bg-blue-600/20 rounded-full blur-3xl pointer-events-none" />
         <div className="relative max-w-2xl">
-          <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-red-400 mb-2">Recherche par VIN</div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-blue-400 mb-2">Recherche par VIN</div>
           <h2 className="font-display text-2xl sm:text-3xl font-black uppercase text-white tracking-tight leading-tight">
-            Trouvez votre <span className="text-red-500">{label}</span>
+            Trouvez votre <span className="text-blue-500">{label}</span>
           </h2>
           <p className="text-slate-300 text-sm mt-3 max-w-lg">
             Saisissez votre numéro VIN ci-dessous — nous interrogeons en direct nos partenaires
@@ -205,14 +212,14 @@ function LeafPanel({ label, searchKeyword, splitKeywords, vehicle, navigate }) {
                 onChange={(e) => setVinInput(e.target.value.toUpperCase())}
                 maxLength={17}
                 placeholder="VF15R0K0H48649991"
-                className="w-full pl-9 pr-3 py-3 text-sm font-mono-vin tracking-wider text-slate-900 border border-slate-300 rounded-sm focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+                className="w-full pl-9 pr-3 py-3 text-sm font-mono-vin tracking-wider text-slate-900 border border-slate-300 rounded-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                 data-testid="leaf-vin-input"
                 autoFocus
               />
             </div>
             <button
               type="submit"
-              className="inline-flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white font-black uppercase text-sm tracking-wider px-6 py-3 rounded-sm transition-colors shadow-lg shadow-red-900/30"
+              className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-black uppercase text-sm tracking-wider px-6 py-3 rounded-sm transition-colors shadow-lg shadow-blue-900/30"
               data-testid="leaf-vin-submit"
             >
               <Search className="w-4 h-4" /> Rechercher
@@ -228,7 +235,7 @@ function LeafPanel({ label, searchKeyword, splitKeywords, vehicle, navigate }) {
             Vous n&apos;avez pas le VIN ? Recherchez par marque et modèle.
           </p>
           <div className="flex gap-3">
-            <Link to="/recherche-vin" className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-red-600 hover:text-red-700">
+            <Link to="/recherche-vin" className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-blue-600 hover:text-blue-700">
               Recherche par marque →
             </Link>
             <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-slate-900">
@@ -245,9 +252,9 @@ function Breadcrumb({ section, sectionLabel, breadcrumb }) {
   const items = breadcrumb || [];
   return (
     <div className="text-xs text-slate-500 flex items-center gap-1.5 font-semibold flex-wrap" data-testid="tree-breadcrumb">
-      <Link to="/" className="hover:text-red-600">Accueil</Link>
+      <Link to="/" className="hover:text-blue-600">Accueil</Link>
       <ChevronRight className="w-3 h-3 text-slate-300" />
-      <Link to={`/catalogue/${section}`} className="hover:text-red-600">{sectionLabel}</Link>
+      <Link to={`/catalogue/${section}`} className="hover:text-blue-600">{sectionLabel}</Link>
       {items.map((b, i) => {
         const path = "/catalogue/" + section + "/" + items.slice(0, i + 1).map((x) => x.slug).join("/");
         const isLast = i === items.length - 1;
@@ -257,7 +264,7 @@ function Breadcrumb({ section, sectionLabel, breadcrumb }) {
             {isLast ? (
               <span className="text-slate-900">{b.label}</span>
             ) : (
-              <Link to={path} className="hover:text-red-600">{b.label}</Link>
+              <Link to={path} className="hover:text-blue-600">{b.label}</Link>
             )}
           </span>
         );

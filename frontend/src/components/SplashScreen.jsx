@@ -71,12 +71,20 @@ export default function SplashScreen({ onDone, duration = 4500 }) {
           <div className="relative">
             {/* Glow ring */}
             <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-blue-500/30 via-blue-400/10 to-red-500/20 blur-2xl scale-110 splash-pulse-slow" />
-            <img
-              src="/bennouri-logo.jpeg"
-              alt="BENNOURI Pièces Auto"
-              className="relative w-56 h-56 sm:w-72 sm:h-72 object-cover rounded-2xl shadow-2xl shadow-blue-900/50 ring-1 ring-white/10"
-              draggable={false}
-            />
+      <img
+  src="/bennouri-logo.jpeg"
+  alt="BENNOURI Pièces Auto"
+  className="relative w-56 h-56 sm:w-72 sm:h-72 object-cover rounded-2xl shadow-2xl shadow-blue-900/50 ring-1 ring-white/10"
+  style={{
+    WebkitMaskImage: "linear-gradient(to right, transparent 0%, black 20%, black 100%)",
+    maskImage: "linear-gradient(to right, transparent 0%, black 20%, black 100%)",
+    WebkitMaskSize: "100% 100%",
+    maskSize: "100% 100%",
+    WebkitMaskRepeat: "no-repeat",
+    maskRepeat: "no-repeat",
+  }}
+  draggable={false}
+/>
           </div>
         </div>
 

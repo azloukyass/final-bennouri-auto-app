@@ -28,13 +28,16 @@ from fadpro_client import (
     search_by_designation as fadpro_designation_search,
 )
 from iis_supplier_client import get_copia, get_partspro
-from proad_client import search_reference as proad_search 
+from proad_client import search_reference as proad_search, search_category as proad_search_category
+from steq_client import get_steq, search_reference as steq_search
 from email_service import send_welcome_email, send_order_confirmation, send_contact_to_admin, send_password_reset_email
 from rapidapi_client import (
     vin_lookup as rapid_vin_lookup,
+    vin_mega_decode as rapid_vin_mega_decode,
     search_oem as rapid_search_oem,
     list_vehicles_for_model as rapid_list_vehicles,
     find_article_by_oem as rapid_find_article_by_oem,
+    find_article_by_number as rapid_find_article_by_number,
     article_complete_details as rapid_article_details,
 )
 import secrets
@@ -73,6 +76,7 @@ app = FastAPI(title="BENNOURI Pièces Auto API")
 api = APIRouter(prefix="/api")
 UPLOAD_DIR = ROOT_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
+
 
 class RegisterIn(BaseModel):
     name: str
@@ -144,9 +148,10 @@ class ManualPartIn(BaseModel):
     brand: str = ""
     price_tnd: float
     image: str = ""
-    reference_origine: str = ""       
+    reference_origine: str = ""
     compatible_refs: List[str] = []
     stock: int = 25
+
 
 async def get_current_user(request: Request) -> dict:
     token = request.cookies.get("access_token")
@@ -372,7 +377,7 @@ async def get_catalog_node(section: str, path: str):
             "search_keyword": c.get("search_keyword"),
             "split_keywords": bool(c.get("split_keywords")),
         }
-    
+
     manual_items = await db.manual_parts.find(
         {"section": section, "category_path": slugs}, {"_id": 0}
         ).to_list(200)
@@ -515,7 +520,7 @@ def _designation_has_any_token(desig: str, toks: List[str]) -> bool:
     if not toks:
         return True
     norm = _strip_accents(desig)
-    return any(t in norm for t in toks)    
+    return any(t in norm for t in toks)
 
 def _vehicle_compat_matches(compat_list: list, manufacturer_name: str, engine_name: str) -> bool:
     """True iff at least one entry in `compat_list` (from
@@ -586,7 +591,7 @@ SUBCATEGORY_CATEGORY_FILTERS: List[dict] = [
      "required_category_tokens": ["moteur", "distribution", "composants"]},
     {"query_tokens": ["kit", "roulement", "roue"],
      "required_category_tokens": ["suspension", "essieu", "avant", "roulement", "roue"]},
-    {"query_tokens": ["kit", "roulements", "roue"],   # plural variant
+    {"query_tokens": ["kit", "roulements", "roue"],  # plural variant
      "required_category_tokens": ["suspension", "essieu", "avant", "roulement", "roue"]},
     {"query_tokens": ["cylindre", "recepteur", "embrayage"],
      "required_category_tokens": ["embrayage", "boite", "vitesse", "cylindre", "recepteur"]},
@@ -673,50 +678,52 @@ SUBCATEGORY_CATEGORY_FILTERS: List[dict] = [
          ["suspension", "essieu", "arriere", "train", "silenbloc"],
          ["suspension", "essieu", "avant", "triangle", "silenbloc"],
      ]},
-
-      {"query_tokens": ["silentbloc"],  # alternative spelling
+       {"query_tokens": ["silentbloc"],  # alternative spelling
      "required_category_tokens": [
          ["suspension", "essieu", "arriere", "train", "silenbloc"],
          ["suspension", "essieu", "avant", "triangle", "silenbloc"],
      ]},
-
-      # ── Carrosserie ──────────────────────────────────────────────────
+       # ── Carrosserie ──────────────────────────────────────────────────
     {"query_tokens": ["aile", "avant"],
      "required_category_tokens": ["carrosserie", "partie", "avant", "aile"]},
-
-    {"query_tokens": ["grille", "centrale"],
+     {"query_tokens": ["grille", "centrale"],
      "required_category_tokens": ["carrosserie", "partie", "avant", "pare-choc", "grille"]},
     {"query_tokens": ["grille", "pare-choc"],          # variante spelling
      "required_category_tokens": ["carrosserie", "partie", "avant", "pare-choc", "grille"]},
-
-    {"query_tokens": ["cache", "moteur"],
+     {"query_tokens": ["cache", "moteur"],
      "required_category_tokens": ["carrosserie", "partie", "avant", "pare-choc", "cache", "moteur"]},
-
-    {"query_tokens": ["retroviseur"],
+     {"query_tokens": ["retroviseur"],
      "required_category_tokens": ["carrosserie", "porte", "accessoires", "retroviseur"]},
-
-     {"query_tokens": ["pare", "choc"],
+      {"query_tokens": ["pare", "choc"],
      "required_category_tokens": [["carrosserie", "partie", "arriere", "pare-choc"], ["carrosserie", "partie", "avant", "pare-choc"]]},
-
-      {"query_tokens": ["capot", "moteur"],
+       {"query_tokens": ["capot", "moteur"],
      "required_category_tokens": [["carrosserie", "partie", "avant", "capot", "moteur"]]},
-
-     {"query_tokens": ["revetement", "avant"],
+      {"query_tokens": ["revetement", "avant"],
      "required_category_tokens": ["carrosserie", "partie", "avant", "plage"]},
-
-    # ── Éclairage / Électrique ────────────────────────────────────────
+     # ── Éclairage / Électrique ────────────────────────────────────────
     {"query_tokens": ["feu", "position"],
      "required_category_tokens": ["electrique", "eclairage", "signalisation", "phare"]},
-
-    {"query_tokens": ["batterie"],
+     {"query_tokens": ["batterie"],
      "required_category_tokens": ["electrique", "demarreur", "batterie"]},
-
-    {"query_tokens": ["bouton", "lave", "vitre"],
+     {"query_tokens": ["bouton", "lave", "vitre"],
      "required_category_tokens": ["electrique", "interrupteur", "leve", "vitre"]},
     {"query_tokens": ["leve", "vitre"],                # variante courte
      "required_category_tokens": ["electrique", "interrupteur", "leve", "vitre"]},
     # ── To add a NEW sub-category: copy any block above and edit. ────
 ]
+
+
+def _stem_token(t: str) -> str:
+    """Crude singular/plural normalisation for TOKEN MATCHING ONLY (never
+    used against raw designation/categorie text — those keep exact
+    wording). Strips one trailing 's' so e.g. 'chocs' and 'choc' compare
+    equal. Without this, a rule authored as query_tokens=["pare","choc"]
+    (singular) silently never matched the real search query "Pare-chocs"
+    (plural) coming from catalog_data.py's search_keyword — so the
+    carrosserie/pare-choc category filter never activated for that
+    category, and completely unrelated items (joint de culasse, bougies,
+    filtres...) slipped through untouched."""
+    return t[:-1] if len(t) > 4 and t.endswith("s") else t
 
 
 def _category_filter_for_query(q: str) -> Optional[list]:
@@ -725,11 +732,35 @@ def _category_filter_for_query(q: str) -> Optional[list]:
     q_set = set(_designation_query_tokens(q))
     if not q_set:
         return None
+    q_stems = {_stem_token(t) for t in q_set}
     for entry in SUBCATEGORY_CATEGORY_FILTERS:
-        if set(entry["query_tokens"]).issubset(q_set):
+        entry_stems = {_stem_token(t) for t in entry["query_tokens"]}
+        if entry_stems.issubset(q_stems):
             return entry["required_category_tokens"]
     return None
 
+
+# AD-Tunisie (proad_client) logs into a shared Magento session (cookie +
+# form_key CSRF token) and reuses it across calls — see debug_login /
+# debug_category in proad_client.py. Unlike FadPro (stateless HTTP API) or
+# Copia/PartsPro (each already serialised behind get_copia()/get_partspro()'s
+# own per-instance asyncio.Lock), the bare `search_reference` function we
+# import here has NO serialisation at the call site. In /oem-stock-search we
+# fire it concurrently for up to LOCKED_SUPPLIER_CAP candidates at once
+# (asyncio.gather inside `lookup()`), which races multiple requests against
+# the same login session — one call's (re)login can invalidate the cookie
+# another call is mid-flight with, so most/all of them silently come back
+# empty (swallowed by the try/except in cached_supplier_search). This is why
+# PROAD items appear fine from /partners/reference-search (a single ad-hoc
+# call) but never surface from /oem-stock-search (many parallel candidates).
+# Fix: serialise every proad_search call app-wide with one lock, same
+# protection Copia/PartsPro already have.
+_PROAD_SEARCH_LOCK = asyncio.Lock()
+
+
+async def proad_search_serialized(ref: str):
+    async with _PROAD_SEARCH_LOCK:
+        return await proad_search(ref)
 
 
 def oem_search_variants(ref: str) -> List[str]:
@@ -938,6 +969,72 @@ async def decode_vin(payload: VinIn):
 
     return {"vin": vin, **info}
 
+@api.get("/rapidapi/vin/{vin}")
+async def rapidapi_vin(vin: str):
+    """Resolve VIN via RapidAPI TecDoc — cached by VIN in MongoDB.
+    Falls TecDoc keinen Treffer hat, Fallback auf vin-decoder-mega, dessen
+    Antwort bereits ein gemapptes tecdoc_model_id/tecdoc_manu_id liefert —
+    damit funktioniert der Motor-Varianten-Picker unverändert weiter.
+    Returns {vin, manu_id, manu_name, model_id, model_name}."""
+    vin = vin.strip().upper()
+    # WICHTIG: nur Cache-Einträge verwenden, die bereits `matching_vehicles`
+    # kennen. Ältere, vor diesem Feature gecachte VINs haben dieses Feld
+    # nicht — würden wir sie trotzdem zurückgeben, bekäme das Frontend nie
+    # die vollständige Mehrfach-Modell-Liste (z.B. LEON + LEON ST + ATECA)
+    # und würde fälschlich auf den Single-Modell-Fallback zurückfallen, bei
+    # dem jede Motor-Zeile denselben (falschen) Fahrzeugnamen zeigt. Ein
+    # fehlender Key erzwingt einen frischen Abruf, der den Cache-Eintrag
+    # danach mit dem vollständigen Feld überschreibt (self-healing).
+    cached = await db.tecdoc_vehicles.find_one({"vin": vin}, {"_id": 0})
+    if cached and "matching_vehicles" in cached:
+        return {**cached, "source": "cache"}
+
+    info = await rapid_vin_lookup(vin)
+    source = "fresh"
+
+    if not info:
+        mega = await rapid_vin_mega_decode(vin)
+        if mega and str(mega.get("code_erreur", "")) == "200" and mega.get("tecdoc_model_id"):
+            try:
+                model_id = int(mega["tecdoc_model_id"])
+            except (TypeError, ValueError):
+                model_id = None
+            try:
+                manu_id = int(mega["tecdoc_manu_id"]) if mega.get("tecdoc_manu_id") else None
+            except (TypeError, ValueError):
+                manu_id = None
+            if model_id:
+                info = {
+                    "manu_id": manu_id,
+                    "manu_name": mega.get("marque") or "",
+                    "model_id": model_id,
+                    "model_name": mega.get("modele") or mega.get("modele_en") or "",
+                    # vin-decoder-mega liefert keine matchingVehicles-Liste —
+                    # Key trotzdem explizit setzen (leer), damit der
+                    # Cache-Check oben diesen Eintrag künftig als "vollständig"
+                    # erkennt und nicht bei jedem Request neu abfragt.
+                    "matching_vehicles": [],
+                }
+                source = "vin-mega"
+
+    if not info:
+        raise HTTPException(404, "Aucun véhicule trouvé pour ce VIN dans la base TecDoc")
+
+    # A VIN prefix can match several candidate TecDoc models at once (e.g.
+    # LEON + LEON ST + ATECA for the same WMI/VDS) — `matching_vehicles`
+    # carries the FULL flat list of concrete vehicleIds across all of them.
+    # Enrich duplicate engine-name entries with power (kW/ch) the same way
+    # /vehicles/variants does, so the picker can tell e.g. two "2.0 TDI"
+    # apart before caching the result.
+    if info.get("matching_vehicles"):
+        info["matching_vehicles"] = await _enrich_duplicate_engine_variants(
+            info["matching_vehicles"], lang_id=6,
+        )
+
+    doc = {**info, "vin": vin, "cached_at": datetime.now(timezone.utc).isoformat()}
+    await db.tecdoc_vehicles.update_one({"vin": vin}, {"$set": doc}, upsert=True)
+    return {**info, "vin": vin, "source": source}
+
 
 @api.get("/vin/partsouq-status/{vin}")
 async def partsouq_status(vin: str):
@@ -1009,72 +1106,108 @@ async def partsouq_subgroup_cached(vin: str, cid: str):
     return cached
 
 
-@api.get("/rapidapi/vin/{vin}")
-async def rapidapi_vin(vin: str):
-    """Resolve VIN via RapidAPI TecDoc — cached by VIN in MongoDB.
-    Returns {vin, manu_id, manu_name, model_id, model_name}."""
-    vin = vin.strip().upper()
-    cached = await db.tecdoc_vehicles.find_one({"vin": vin}, {"_id": 0})
-    if cached:
-        return {**cached, "source": "cache"}
-    info = await rapid_vin_lookup(vin)
-    if not info:
-        raise HTTPException(404, "Aucun véhicule trouvé pour ce VIN dans la base TecDoc")
-    doc = {**info, "cached_at": datetime.now(timezone.utc).isoformat()}
-    await db.tecdoc_vehicles.update_one({"vin": vin}, {"$set": doc}, upsert=True)
-    return {**info, "source": "fresh"}
+async def _enrich_duplicate_engine_variants(
+    vehicles: list, lang_id: int = 6, country_filter_id: int = 63,
+) -> list:
+    """Given a list of TecDoc vehicle dicts (each with at least `vehicleId`
+    and `typeEngineName`), fetch power output (kW / ch) via
+    vehicle-type-details for any vehicleId whose `typeEngineName` is NOT
+    unique within the list — so the frontend can show e.g. "1.4 · 80 kW /
+    109 ch" to tell two identically-named engines apart. Entries with a
+    unique engine name are returned unchanged (no extra API call). Results
+    are cached per vehicleId in Mongo (`tecdoc_vehicle_type_details`).
+
+    Shared by /vehicles/variants/{model_id} (single-model picker) and
+    /rapidapi/vin/{vin} (multi-model `matching_vehicles` picker) so both
+    code paths disambiguate duplicate engine names the same way.
+    """
+    name_counts: dict = {}
+    for v in vehicles:
+        name = (v.get("typeEngineName") or "").strip().lower()
+        if name:
+            name_counts[name] = name_counts.get(name, 0) + 1
+    duplicate_ids = {
+        v.get("vehicleId")
+        for v in vehicles
+        if v.get("vehicleId")
+        and name_counts.get((v.get("typeEngineName") or "").strip().lower(), 0) > 1
+    }
+
+    details_by_id: dict = {}
+    if duplicate_ids:
+        from rapidapi_client import get_vehicle_type_details as rapid_vehicle_type_details
+
+        async def _fetch_details(vid: int):
+            cache_key = {"vehicle_id": vid, "lang_id": lang_id, "country_filter_id": country_filter_id}
+            cached = await db.tecdoc_vehicle_type_details.find_one(cache_key, {"_id": 0, "details": 1})
+            if cached and cached.get("details"):
+                return vid, cached["details"]
+            details = await rapid_vehicle_type_details(
+                vid, lang_id=lang_id, country_filter_id=country_filter_id,
+            )
+            if details:
+                await db.tecdoc_vehicle_type_details.update_one(
+                    cache_key,
+                    {"$set": {
+                        **cache_key,
+                        "details": details,
+                        "cached_at": datetime.now(timezone.utc).isoformat(),
+                    }},
+                    upsert=True,
+                )
+            return vid, details
+
+        sem = asyncio.Semaphore(10)
+
+        async def _bounded(vid):
+            async with sem:
+                return await _fetch_details(vid)
+
+        results = await asyncio.gather(
+            *[_bounded(vid) for vid in duplicate_ids], return_exceptions=True,
+        )
+        for res in results:
+            if isinstance(res, Exception):
+                continue
+            vid, details = res
+            if details:
+                details_by_id[vid] = details
+
+    enriched = []
+    for v in vehicles:
+        item = dict(v)
+        det = details_by_id.get(v.get("vehicleId"))
+        if det:
+            item["power_kw"] = det.get("powerKw")
+            item["power_ps"] = det.get("powerPs")
+            item["construction_interval_start"] = det.get("constructionIntervalStart")
+            item["construction_interval_end"] = det.get("constructionIntervalEnd")
+        enriched.append(item)
+    return enriched
+
 
 @api.get("/vehicles/variants/{model_id}")
 async def vehicle_variants(model_id: int, lang_id: int = 6):
-    """List all TecDoc vehicle-id variants for a modelId, grouped by fuel
-    type (Essence / Diesel / Hybride / GPL / Électrique). Always queries
+    """List all TecDoc vehicle-id variants for a modelId. Always queries
     TecDoc in French (lang_id=6). Used by the frontend to let the user
-    manually pick their exact engine."""
-    vehicles = await rapid_list_vehicles(model_id, 6)
-    return {
-        "model_id": model_id,
-        "vehicles": vehicles,
-        "debug": {
-            "count": len(vehicles),
-        }
-    }    
+    manually pick their exact engine.
+
+    When the SAME `typeEngineName` (e.g. "1.4") appears more than once with
+    a DIFFERENT vehicleId — common for facelifts / power variants sharing
+    the same displacement label — we additionally fetch the technical
+    details (vehicle-type-details) for just those vehicleIds, so the
+    frontend can show the power output (kW / ch) next to the name and let
+    the user tell the two "1.4" apart.
+    """
+    vehicles = await rapid_list_vehicles(model_id, lang_id)
     if not vehicles:
-        raise HTTPException(404, f"Aucune variante trouvée pour modelId={model_id} (lang_id=6)")
+        raise HTTPException(404, f"Aucune variante trouvée pour modelId={model_id}")
 
-    grouped: dict = {}
-    for v in vehicles:
-        vid = v.get("vehicleId")
-        if not vid:
-            continue
-        engine = v.get("typeEngineName") or "—"
-        fuel = _fuel_category_from_engine(engine)
-        grouped.setdefault(fuel, []).append({
-            "vehicle_id": vid,
-            "engine_name": engine,
-            "manufacturer_name": v.get("manufacturerName") or "",
-            "model_name": v.get("modelName") or "",
-        })
-
-    # Deduplicate identical engine_name entries within the same fuel group
-    # (TecDoc sometimes lists the same engine twice under different
-    # vehicleIds for minor trim/body variants).
-    for fuel, variants in grouped.items():
-        seen = set()
-        deduped = []
-        for it in variants:
-            key = it["engine_name"]
-            if key in seen:
-                continue
-            seen.add(key)
-            deduped.append(it)
-        grouped[fuel] = deduped
-
-    order = ["Essence", "Diesel", "Hybride", "GPL", "Électrique"]
-    fuels = [f for f in order if f in grouped] + [f for f in grouped if f not in order]
+    enriched = await _enrich_duplicate_engine_variants(vehicles, lang_id=lang_id)
 
     return {
         "model_id": model_id,
-        "fuels": [{"fuel": f, "variants": grouped[f]} for f in fuels],
+        "vehicles": enriched,
     }
 
 
@@ -1110,25 +1243,263 @@ async def debug_rapidapi_vehicles(model_id: int, lang_id: int = 6, country_filte
             "url": url,
             "key_tail": key_tail,
             "exception": str(e),
-        }    
+        }
+
+@api.get("/debug/proad-login")
+async def debug_proad_login():
+    """Temporary debug endpoint: runs the AD-Tunisie (proad) login flow
+    step-by-step and reports exactly what happened — whether the login
+    page's form_key was found, the HTTP status/final URL of the login
+    POST, whether we're still on the login page afterwards, and (if
+    present) Magento's own error banner text. No auth required. Remove
+    once the AD-Tunisie login issue is resolved.
+    Usage: GET /api/debug/proad-login"""
+    from proad_client import debug_login as proad_debug_login
+    return await proad_debug_login()
+
+
+@api.get("/debug/proad-category/{key}")
+async def debug_proad_category(key: str):
+    """Temporary debug endpoint: diagnoses why AD-Tunisie (proad) category
+    scraping returns 0 items in production — reports whether login was
+    (re)attempted and succeeded, the HTTP status/final URL of the category
+    fetch, whether we got bounced back to the login page, and how many
+    products the parser extracted from the raw HTML. No auth required so
+    it can be hit directly from a browser. Remove once the AD-Tunisie
+    integration is confirmed working end-to-end.
+    Usage: GET /api/debug/proad-category/batterie
+           GET /api/debug/proad-category/huile-moteur"""
+    from proad_client import debug_category as proad_debug_category
+    return await proad_debug_category(key)
+
+
+@api.get("/debug/proad-reference/{ref}")
+async def debug_proad_reference(ref: str):
+    """Temporary debug endpoint: diagnoses why a SPECIFIC OEM/reference
+    search against AD-Tunisie (proad) returns 0 items via /oem-stock-search
+    even when the exact same reference works through
+    /api/partners/reference-search. Both endpoints call the very same
+    proad_client.search_reference(), so if this endpoint shows items but
+    the OEM search still doesn't, the drop is happening AFTER the fetch —
+    in server.py's category/compat filters, not in proad_client.py itself.
+    Reports: login status, HTTP status/final URL of the search request,
+    whether we got bounced to the login page, raw HTML occurrence counts
+    for the product markup (compare to parsed_count — if raw counts are
+    high but parsed_count is 0, the selectors don't match this page), and
+    the exact parsed items. No auth required.
+    Usage: GET /api/debug/proad-reference/1608745980"""
+    from proad_client import debug_search_reference as proad_debug_search_reference
+    return await proad_debug_search_reference(ref)
+
+
+@api.get("/debug/copia-reference/{ref}")
+async def debug_copia_reference(ref: str):
+    """Temporary debug endpoint: diagnoses why a Copia reference search
+    returns 0 items (affects BOTH /oem-stock-search AND
+    /partners/reference-search, since PartnersSearchModal calls the latter
+    directly with no filters afterwards — so an empty result there proves
+    the problem is inside the Copia client itself, not in server.py's
+    filtering). Walks login + SaveMot + FindItembyCodeArticle step by step
+    and reports the HTTP status and raw body of each call — in particular
+    whether the session silently died (an IIS session can expire between
+    SaveMot and FindItem, or SaveMot can itself return 200 against a dead
+    session on some IIS configs) without any exception being raised.
+    No auth required.
+    Usage: GET /api/debug/copia-reference/12345"""
+    return await get_copia().debug_search_reference(ref)
+
+
+@api.get("/debug/partspro-reference/{ref}")
+async def debug_partspro_reference(ref: str):
+    """Same as /api/debug/copia-reference/{ref} but for PartsPro.
+    Usage: GET /api/debug/partspro-reference/12345"""
+    return await get_partspro().debug_search_reference(ref)
+
+
+@api.get("/debug/steq-login")
+async def debug_steq_login():
+    """Diagnoses STEQ (b2bsteq.com) login failures such as "la page de
+    login a été re-rendue — identifiants probablement invalides". Shows
+    EVERY field found in the login form (in case there's a hidden CSRF
+    token we're not forwarding), the exact payload sent, the resolved
+    form action/method, and the full HTTP response of the login POST
+    (status, Location, Set-Cookie, body snippet) — so a login failure can
+    be diagnosed even when the username/password are actually correct.
+    No auth required.
+    Usage: GET /api/debug/steq-login"""
+    return await get_steq().debug_login()
+
+
+@api.get("/debug/steq-reference/{ref}")
+async def debug_steq_reference(ref: str):
+    """Diagnoses why a STEQ (b2bsteq.com) reference search returns 0 items.
+    Walks login + form-recherche.html + recherche-reference/<token> +
+    fetch-article-pagination.html step by step and reports the HTTP status
+    of each call, whether the `ApiJsonItemAll` JSON block was found on the
+    results page, and the parsed vs. dropped item counts — same style as
+    /api/debug/copia-reference/{ref}. No auth required.
+    Usage: GET /api/debug/steq-reference/813317"""
+    return await get_steq().debug_search_reference(ref)
+
+
+@api.get("/debug/steq-logout")
+async def debug_steq_logout():
+    """Explicitly releases STEQ's single-session-per-account lock (calls
+    /deconnecter.html using whatever session THIS server process currently
+    holds). STEQ only allows one active login per account platform-wide —
+    if a previous test/search left a session dangling, every new login
+    (ours or a real user logging in directly on b2bsteq.com) fails with
+    "Compte déjà connecté sur un autre appareil" until that session either
+    times out (~15 min) or is explicitly logged out. Use this to force an
+    immediate release instead of waiting — but it only works if THIS
+    process is the one currently holding the active session (check
+    `was_already_authenticated`/`marked_authenticated` in a prior
+    /api/debug/steq-login or /api/debug/steq-reference/{ref} call); if a
+    different worker process (or a since-restarted process) holds it, this
+    returns ok=false and the timeout is the only option. No auth required.
+    Usage: GET /api/debug/steq-logout"""
+    return await get_steq().logout()
+
+
+@api.get("/debug/oem-candidates")
+async def debug_oem_candidates(
+    model_id: int = 0,
+    vehicle_id: int = 0,
+    q: str = "",
+    lang_id: int = 6,
+    split: bool = False,
+):
+    """Temporary debug endpoint: runs ONLY the TecDoc OEM-ref lookup step
+    of /oem-stock-search (no supplier calls) and returns the exact
+    candidate reference list that would be sent to FadPro/Copia/PartsPro/
+    PROAD for a given search. Use this to find the precise OEM ref TecDoc
+    returns for a query, then feed it into
+    /api/debug/proad-reference/{ref} to see whether AD-Tunisie actually has
+    that exact ref.
+    Usage: GET /api/debug/oem-candidates?vehicle_id=29685&q=Kit+de+roulements+de+roue"""
+    query = (q or "").strip()
+    if len(query) < 2:
+        raise HTTPException(400, "q trop court (min. 2 caractères)")
+
+    vid = vehicle_id
+    if not vid and model_id:
+        vehicles = await rapid_list_vehicles(model_id, lang_id)
+        if vehicles:
+            vid = vehicles[0].get("vehicleId")
+    if not vid:
+        raise HTTPException(400, "vehicle_id ou model_id requis")
+
+    if not split:
+        keywords = [query]
+        keyword_results = [await rapid_search_oem(vid, query, lang_id)]
+    else:
+        if "," in query:
+            raw_tokens = [t.strip() for t in query.split(",") if t.strip()]
+        else:
+            raw_tokens = [t.strip() for t in _re.split(r"\s+", query) if t.strip()]
+        keywords = [t for t in raw_tokens if len(t) >= 2] or [query]
+        keyword_results = [await rapid_search_oem(vid, k, lang_id) for k in keywords]
+
+    seen_oem = set()
+    oem_items = []
+    for batch in keyword_results:
+        for it in (batch or []):
+            ref = (it.get("ref") or "").strip()
+            if ref and ref not in seen_oem:
+                seen_oem.add(ref)
+                oem_items.append({"ref": ref, "name": it.get("name") or ""})
+
+    return {
+        "query": query,
+        "vehicle_id": vid,
+        "keywords_searched": keywords,
+        "raw_count": len(oem_items),
+        "candidates": oem_items,
+    }
+
 
 @api.get("/rapidapi/article-info")
-async def rapidapi_article_info(ref: str, lang_id: int = 6, country_filter_id: int = 63):
-    """Two-step TecDoc lookup → full article details for a given OEM reference.
-    Cached per (ref-normalised, lang_id, country_filter_id) in MongoDB."""
+async def rapidapi_article_info(ref: str, lang_id: int = 6, country_filter_id: int = 63, label: str = ""):
+    """Two-step TecDoc lookup → full article details for a given reference.
+    Cached per (ref-normalised, lang_id, country_filter_id, label) in MongoDB.
+
+    Step 0 (NEW, only when `label` is passed): a single OEM number often
+    cross-references MULTIPLE different TecDoc articles from different
+    suppliers (different photos, sometimes even different product types
+    sharing the same OEM slot). Blindly taking whichever candidate the API
+    returns first caused wrong images to show up for real articles — e.g.
+    OEM ref 1214015 (a Ford front bumper, FadPro ref FOR07FI010P) returning
+    a DIEDERICHS-photographed bumper that isn't the actual item on offer.
+    When the caller tells us what it's actually looking for (`label` — the
+    category label / oem_name, e.g. "Pare-chocs"), we pull ALL cross-
+    referenced candidates for this OEM ref (same data as
+    /rapidapi/oem-search/artikel-no/{oem}) and pick the one whose
+    `articleProductName` actually matches that label, instead of trusting
+    the first result. Falls through to the old two-step lookup if no
+    labelled candidate matches (or no label was given).
+
+    Step 1: try `ref` as a TecDoc OEM number (article-oem-search-no).
+    Step 2 (fallback, only if step 1 finds nothing): try `ref` as the
+    SUPPLIER's own articleNo instead (article-number-details) — this is the
+    normal case for AD-Tunisie / Copia / PartsPro items, whose reference is
+    a supplier SKU rather than a TecDoc OEM number, so step 1 almost always
+    404s for them. Either way, once we have an articleId we fetch the same
+    full article-complete-details payload as before."""
     ref = (ref or "").strip()
     if not ref:
-        raise HTTPException(400, "Référence OEM requise")
+        raise HTTPException(400, "Référence requise")
+    label = (label or "").strip()
 
-    cache_key = {"ref": ref.upper(), "lang_id": lang_id, "country_filter_id": country_filter_id}
+    cache_key = {
+        "ref": ref.upper(),
+        "lang_id": lang_id,
+        "country_filter_id": country_filter_id,
+        "label": label.upper(),
+    }
     cached = await db.tecdoc_article_cache.find_one(cache_key, {"_id": 0, "cached_at": 0})
     if cached and cached.get("article"):
         return {**cached, "source": "cache"}
 
-    first = await rapid_find_article_by_oem(ref, lang_id=lang_id)
+    lookup_mode = "oem"
+    first = None
+    article_id = None
+
+    if label:
+        try:
+            from rapidapi_client import search_by_article_oem_no as rapid_search_by_oem_no_list
+            candidates = await rapid_search_by_oem_no_list(ref, lang_id)
+        except Exception as e:
+            logging.warning(f"article-info label-match candidate fetch failed for ref={ref}: {e}")
+            candidates = []
+        if candidates:
+            label_tokens = _designation_query_tokens(label)
+
+            def _match_score(it: dict) -> int:
+                name_norm = _strip_accents(it.get("articleProductName") or "")
+                if label_tokens and all(t in name_norm for t in label_tokens):
+                    return 2  # every label word present — best match
+                if label_tokens and any(t in name_norm for t in label_tokens):
+                    return 1  # partial match — better than nothing
+                return 0  # name doesn't relate to what we searched at all
+
+            best = max(candidates, key=_match_score)
+            if _match_score(best) > 0:
+                first = best
+                article_id = best.get("articleId")
+                lookup_mode = "oem-label-matched"
+
+    if not first:
+        first = await rapid_find_article_by_oem(ref, lang_id=lang_id)
+        if not first:
+            lookup_mode = "article-number"
+            first = await rapid_find_article_by_number(
+                ref, lang_id=lang_id, country_filter_id=country_filter_id,
+            )
+
     if not first:
         raise HTTPException(404, f"Aucun article TecDoc trouvé pour la référence {ref}")
-    article_id = first.get("articleId")
+    if not article_id:
+        article_id = first.get("articleId")
     if not article_id:
         raise HTTPException(404, f"Article sans ID pour {ref}")
 
@@ -1144,6 +1515,7 @@ async def rapidapi_article_info(ref: str, lang_id: int = 6, country_filter_id: i
         "article_id": article_id,
         "article": details,
         "summary": first,
+        "lookup_mode": lookup_mode,
         "cached_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.tecdoc_article_cache.update_one(cache_key, {"$set": doc}, upsert=True)
@@ -1207,7 +1579,7 @@ async def rapidapi_compatible_cars_endpoint(
         "items": compat,
         "cached_at": datetime.now(timezone.utc).isoformat(),
         "source": "fresh",
-    }    
+    }
 
 POPULAR_CATEGORIES = {
     "batterie": {
@@ -1219,6 +1591,9 @@ POPULAR_CATEGORIES = {
         "niv2": "DEMARREUR / COMPOSANTS",
         "niv3": "BATTERIE",
         "niv4": "BATTERIE",
+        # Additional source: AD-Tunisie (pro.ad-tunisie.com) category listing,
+        # merged with the FadPro results below (deduped by reference).
+        "proad_category": "batterie",
         # Drop ancillary parts (supports, covers) — only show actual batteries.
         # Includes the "supp" abbreviation used by some suppliers (e.g. "SUPP BATTERIE").
         "exclude_terms": ["support", "supp ", "cache", "console"],
@@ -1233,7 +1608,10 @@ POPULAR_CATEGORIES = {
         "niv1": "LUBRIFICATION MOTEUR",
         "niv2": "LUBRIFIANTS",
         "niv3": "HUILE",
-        "niv4": "HUILE MOTEUR"
+        "niv4": "HUILE MOTEUR",
+        # Additional source: AD-Tunisie (pro.ad-tunisie.com) lubrifiants
+        # category listing, merged with the FadPro results (deduped by ref).
+        "proad_category": "huile-moteur",
     },
     "accessoires": {
         "label": "Accessoires",
@@ -1273,13 +1651,17 @@ async def popular_categories():
 
 
 @api.get("/partners/category-products")
-async def partners_category_products(
-    slug: str,
-    user: dict = Depends(get_current_user),
-):
-    """Fetch products for a popular category from FadPro.
+async def partners_category_products(slug: str):
+    """Fetch products for a popular category. Combines FadPro (niv-hierarchy
+    / designation search, possibly multiple sources) with an optional
+    AD-Tunisie (proad) category listing when the category config has a
+    `proad_category` key (currently 'batterie' and 'huile-moteur').
     For 'filtre-huile': combines the niv-hierarchy search + 4 designation
-    searches, each capped at 50 items, then shows all of them together."""
+    searches, each capped at 50 items, then shows all of them together.
+
+    No login required — guests can browse popular-category products just
+    like registered users; only checkout (/api/orders) requires an account.
+    """
 
     cfg = POPULAR_CATEGORIES.get(slug)
     if not cfg:
@@ -1308,7 +1690,7 @@ async def partners_category_products(
         label_tokens = _designation_query_tokens(label)
         designation_norm = _strip_accents(designation)
 
-        return all(t in designation_norm for t in label_tokens)    
+        return all(t in designation_norm for t in label_tokens)
 
     def _process_source(raw_batch, source_label):
         """Keep only IN-STOCK priced items, apply exclude_terms, sort, cap to PER_SOURCE_CAP."""
@@ -1342,7 +1724,7 @@ async def partners_category_products(
         batch = filtered
         batch.sort(key=lambda x: (0 if x.get("in_stock") else 1, x.get("prix_tnd") or 1e9))
         capped = batch[:PER_SOURCE_CAP]
-        logging.info(f"FadPro source '{source_label}' → {len(raw_batch or [])} raw, {len(batch)} in-stock filtered, {len(capped)} kept")
+        logging.info(f"Category source '{source_label}' → {len(raw_batch or [])} raw, {len(batch)} in-stock filtered, {len(capped)} kept")
         return capped
 
     all_sources: list[list[dict]] = []
@@ -1357,7 +1739,10 @@ async def partners_category_products(
                 cfg["niv1"], cfg.get("niv2"), cfg.get("niv3"), cfg.get("niv4"),
             )
             main_label = f"{cfg.get('niv1')}/{cfg.get('niv2')}/{cfg.get('niv3')}"
-        all_sources.append(_process_source(main_raw, main_label))
+        main_batch = _process_source(main_raw, main_label)
+        for it in main_batch:
+            it["source"] = "fadpro"
+        all_sources.append(main_batch)
 
         # 2. Zusätzliche Designation-Quellen (z.B. bei filtre-huile)
         extra_designations = cfg.get("designations") or []
@@ -1371,15 +1756,33 @@ async def partners_category_products(
                     logging.warning(f"FadPro designation '{designation}' failed: {batch}")
                     all_sources.append([])
                     continue
-                all_sources.append(_process_source(batch, designation))
+                processed = _process_source(batch, designation)
+                for it in processed:
+                    it["source"] = "fadpro"
+                all_sources.append(processed)
 
     except Exception as e:
         logging.warning(f"FadPro category lookup failed for {slug}: {e}")
         all_sources = all_sources or [[]]
 
-    # 3. Alle Quellen zusammenführen + nach `ref`/`reference` deduplizieren
+    # 3. AD-Tunisie (proad) — additional source for categories that opt in
+    # via `proad_category` (currently 'batterie' and 'huile-moteur').
+    # Fetched independently so a failure/timeout here never blocks the
+    # FadPro results gathered above.
+    proad_category = cfg.get("proad_category")
+    if proad_category:
+        try:
+            proad_raw = await proad_search_category(proad_category)
+            proad_batch = _process_source(proad_raw, f"AD-Tunisie/{proad_category}")
+            for it in proad_batch:
+                it["source"] = "proad"
+            all_sources.append(proad_batch)
+        except Exception as e:
+            logging.warning(f"AD-Tunisie category lookup failed for {slug}: {e}")
+
+    # 4. Alle Quellen zusammenführen + nach `ref`/`reference` deduplizieren
     #    (ein Artikel könnte z.B. sowohl in der Niv-Suche als auch in
-    #    "HUILE MOTEUR" auftauchen)
+    #    "HUILE MOTEUR" auftauchen, oder bei FadPro UND AD-Tunisie gelistet sein)
     items = []
     seen_refs = set()
     for source_items in all_sources:
@@ -1391,9 +1794,6 @@ async def partners_category_products(
                 seen_refs.add(ref_key)
             items.append(it)
 
-    for it in items:
-        it["source"] = "fadpro"
-
     return {
         "slug": slug,
         "label": cfg["label"],
@@ -1404,9 +1804,11 @@ async def partners_category_products(
 
 
 @api.get("/partners/reference-search")
-async def partners_reference_search(ref: str = "", user: dict = Depends(get_current_user)):
-    """Combined parallel reference search across FadPro + Copia + PartsPro.
-    Authenticated users only.
+async def partners_reference_search(ref: str = ""):
+    """Combined parallel reference search across FadPro + Copia + PartsPro + AD-Tunisie.
+
+    No login required — guest users can search for a reference just like
+    registered users; only checkout (/api/orders) requires an account.
 
     Returns one normalised list (items) with `source` field telling which
     partner each result comes from."""
@@ -1415,24 +1817,28 @@ async def partners_reference_search(ref: str = "", user: dict = Depends(get_curr
     if len(ref) < 2:
         raise HTTPException(400, "Référence trop courte (min. 2 caractères)")
 
-    async def safe_call(coro, source):
+    async def safe_call(coro, source, timeout=8.0):
         try:
-            data = await asyncio.wait_for(coro, timeout=8.0)
+            data = await asyncio.wait_for(coro, timeout=timeout)
             return source, data if isinstance(data, list) else []
         except Exception as e:
             logging.warning(f"{source} reference-search error for ref={ref}: {e}")
             return source, []
 
-    fp, co, pp = await asyncio.gather(
+    fp, co, pp, pa, st = await asyncio.gather(
         safe_call(fadpro_search(ref), "fadpro"),
         safe_call(get_copia().search_reference(ref), "copia"),
         safe_call(get_partspro().search_reference(ref), "partspro"),
-        safe_call(proad_search(ref), "proad"), 
+        safe_call(proad_search_serialized(ref), "proad"),
+        # STEQ needs 3 sequential HTTP round-trips per search (+ a login
+        # on the very first call) — a longer timeout than the other
+        # suppliers to avoid dropping otherwise-valid results.
+        safe_call(steq_search(ref), "steq", timeout=15.0),
     )
 
     aggregated = []
     seen = set()
-    for source, items in (fp, co, pp, pa):
+    for source, items in (fp, co, pp, pa, st):
         for it in items:
             key = (source, (it.get("reference") or "").upper())
             if key in seen:
@@ -1445,8 +1851,9 @@ async def partners_reference_search(ref: str = "", user: dict = Depends(get_curr
 
 
 @api.get("/fadpro/search")
-async def fadpro_search_endpoint(ref: str = "", user: dict = Depends(get_current_user)):
-    """Search FadPro by reference origin (refFour). Authenticated users only.
+async def fadpro_search_endpoint(ref: str = ""):
+    """Search FadPro by reference origin (refFour). No login required —
+    guest users can search just like registered users.
     Prices are adjusted: prix_origine × 0.19 + (prix_origine * 0.35)."""
     ref = (ref or "").strip()
     if len(ref) < 2:
@@ -1471,28 +1878,29 @@ async def oem_stock_search(
     vin: str = "",
     slug: str = "",
     vehicle_id: int = 0,
-    user: dict = Depends(get_current_user),
 ):
 
-    """Combined OEM + multi-supplier lookup.
+    """Combined OEM + multi-supplier lookup. No login required — guests can
+    search for parts just like registered users; only checkout
+    (/api/orders) requires an account.
 
     Workflow:
-      1. Fetch OEM refs from TecDoc for the given model & query.
-         By default the query is sent AS-IS as a single `search-param` (phrase
-         mode) — perfect for searching TecDoc product names like
-         "Caisse à eau, radiateur".
-         When `split=true` the query is split on commas/whitespace into separate
-         keyword searches whose results are merged + deduped (used for the
-         "Kit chaîne" category where TecDoc product names don't match the
-         French shop terminology).
-      2. For each OEM ref, look it up in FadPro/Copia/PartsPro.
-      3. (Optional) Verify vehicle compatibility — when `vehicle_name` is
-         provided (e.g. "RENAULT CLIO IV (BH_)"), items whose supplier title
-         doesn't already mention the model are double-checked against
-         piecesautos.tn. Items that don't list the customer's vehicle in their
-         official compatibility list are dropped.
-      4. Return items, in-stock first, then out-of-stock items (labelled
-         "Hors stock" on the card).
+     1. Fetch OEM refs from TecDoc for the given model & query.
+        By default the query is sent AS-IS as a single `search-param` (phrase
+        mode) — perfect for searching TecDoc product names like
+        "Caisse à eau, radiateur".
+        When `split=true` the query is split on commas/whitespace into separate
+        keyword searches whose results are merged + deduped (used for the
+        "Kit chaîne" category where TecDoc product names don't match the
+        French shop terminology).
+     2. For each OEM ref, look it up in FadPro/Copia/PartsPro.
+     3. (Optional) Verify vehicle compatibility — when `vehicle_name` is
+        provided (e.g. "RENAULT CLIO IV (BH_)"), items whose supplier title
+        doesn't already mention the model are double-checked against
+        piecesautos.tn. Items that don't list the customer's vehicle in their
+        official compatibility list are dropped.
+     4. Return items, in-stock first, then out-of-stock items (labelled
+        "Hors stock" on the card).
     """
     import asyncio
     from rapidapi_client import (
@@ -1532,7 +1940,7 @@ async def oem_stock_search(
                 }},
                 upsert=True,
             )
-    
+
     # 1. OEM refs from TecDoc.
     # Default (split=False, phrase mode): the query is sent AS-IS as a single
     # search-param. This is what TecDoc expects for product-name searches like
@@ -1803,10 +2211,12 @@ async def oem_stock_search(
     async def lookup(c, idx: int):
         async with sem:
             # FadPro runs for EVERY candidate (no lock → fully parallel).
-            # Copia & PartsPro are skipped past LOCKED_SUPPLIER_CAP — their
-            # per-instance asyncio.Lock would otherwise serialise all 600+
-            # candidates and trip the global timeout, preventing the FadPro
-            # variant fallback from ever surfacing matches.
+            # Copia, PartsPro & PROAD are skipped past LOCKED_SUPPLIER_CAP —
+            # they're each serialised (Copia/PartsPro via their per-instance
+            # asyncio.Lock, PROAD via _PROAD_SEARCH_LOCK / proad_search_serialized
+            # protecting its shared login session) and would otherwise serialise
+            # all 600+ candidates and trip the global timeout, preventing the
+            # FadPro variant fallback from ever surfacing matches.
             tasks = [
                 cached_supplier_search("fadpro",   c["ref"], fadpro_search),
             ]
@@ -1814,43 +2224,51 @@ async def oem_stock_search(
             if check_locked:
                 tasks.append(cached_supplier_search("copia",    c["ref"], lambda r: get_copia().search_reference(r)))
                 tasks.append(cached_supplier_search("partspro", c["ref"], lambda r: get_partspro().search_reference(r)))
-                tasks.append(cached_supplier_search("proad",    c["ref"], proad_search))
+                tasks.append(cached_supplier_search("proad",    c["ref"], proad_search_serialized))
+                # STEQ (b2bsteq.com) — same story as Copia/PartsPro/PROAD:
+                # one shared login session serialised behind SteqClient's
+                # own asyncio.Lock, so it's capped the same way.
+                tasks.append(cached_supplier_search("steq",     c["ref"], steq_search))
             gathered = await asyncio.gather(*tasks, return_exceptions=True)
             fp = gathered[0]
             co = gathered[1] if check_locked else []
             pp = gathered[2] if check_locked else []
             pa = gathered[3] if check_locked else []
+            st = gathered[4] if check_locked else []
             # Normalise exceptions to empty lists
             fp = fp if isinstance(fp, list) else []
             co = co if isinstance(co, list) else []
             pp = pp if isinstance(pp, list) else []
-            pa = pa if isinstance(pa, list) else [] 
+            pa = pa if isinstance(pa, list) else []
+            st = st if isinstance(st, list) else []
             picked = []
-            for batch, source in ((fp, "fadpro"), (co, "copia"), (pp, "partspro"), (pa, "proad")):
+            for batch, source in ((fp, "fadpro"), (co, "copia"), (pp, "partspro"), (pa, "proad"), (st, "steq")):
                 if isinstance(batch, Exception):
                     logging.warning(f"{source} lookup error for {c['ref']}: {batch}")
                     continue
                 if not isinstance(batch, list):
                     continue
-                # Three-tier preference per supplier:
-                #   1. In-stock items with a price (best)
-                #   2. Out-of-stock items with a price (still displayable)
-                #   3. Out-of-stock items WITHOUT a price (last resort — labelled
-                #      "Prix sur demande" in the UI so customers can still ask)
-                in_stock_pick = None
-                priced_oos_pick = None
-                noprice_oos_pick = None
-                for fi in batch:
-                    if fi.get("in_stock") and fi.get("prix_tnd"):
-                        in_stock_pick = fi
-                        break
-                    if fi.get("prix_tnd") and priced_oos_pick is None:
-                        priced_oos_pick = fi
-                    elif not fi.get("prix_tnd") and noprice_oos_pick is None:
-                        noprice_oos_pick = fi
-                chosen = in_stock_pick or priced_oos_pick or noprice_oos_pick
-                if chosen:
-                    chosen = {**chosen, "oem_ref": c["ref"], "oem_name": c["oem_name"], "source": chosen.get("source", source)}
+                # Keep EVERY priced item this supplier returned for this OEM
+                # reference — not just one "best" pick. A single OEM ref
+                # commonly maps to several of a supplier's own SKUs (e.g.
+                # Copia listing the same reference under multiple brands —
+                # SNR, FEBI, LUK, etc.), and the customer should see all of
+                # them, in/out of stock alike (sorted later, in-stock
+                # first). Previously only one representative item survived
+                # per (oem_ref, source) pair, which silently hid every
+                # other match — this is what caused "Copia has 5 matching
+                # articles for this reference but only 1 shows up here".
+                priced_items = [fi for fi in batch if fi.get("prix_tnd")]
+                if priced_items:
+                    for fi in priced_items:
+                        chosen = {**fi, "oem_ref": c["ref"], "oem_name": c["oem_name"], "source": fi.get("source", source)}
+                        picked.append(chosen)
+                elif batch:
+                    # Nothing priced at all from this supplier for this ref —
+                    # fall back to a single no-price entry so "Prix sur
+                    # demande" can still be offered instead of nothing.
+                    fi = batch[0]
+                    chosen = {**fi, "oem_ref": c["ref"], "oem_name": c["oem_name"], "source": fi.get("source", source)}
                     picked.append(chosen)
 
             # Vehicle-compatibility filter (only when client passed vehicle_name).
@@ -1943,33 +2361,68 @@ async def oem_stock_search(
     # Sub-category filter, two tiers:
     #  1. Items WITH a non-empty `categorie` (FadPro): pass through the
     #     configured SUBCATEGORY_CATEGORY_FILTERS rule (AND / OR-of-AND).
-    #  2. Items WITHOUT a `categorie` (Copia / PartsPro often ship empty
-    #     hierarchies): fall back to matching ALL tokens of the sub-category
-    #     `label` against the supplier `designation`. Example: label="Plage"
-    #     requires the token "plage" to appear inside the designation string.
-    # Items with an empty categorie AND no label provided are kept (no info
-    # to filter on) — this preserves the pre-change behaviour for legacy
-    # frontend calls that don't send a label.
+    #  2. Items WITHOUT a `categorie` (Copia / PartsPro / AD-Tunisie ship
+    #     empty hierarchies): match ALL tokens of the sub-category `label`
+    #     (resolved from the `slug` the frontend sent, e.g. slug=
+    #     "radiateur-turbo" → label="Radiateur turbo") against the supplier
+    #     `designation`.
+    #
+    # BUG FIXED: when the caller does NOT pass `slug` (this is the normal
+    # case for PartsouqCatalog.jsx — it never sends `slug`, only `q`), the
+    # code used to fall back to tokenising the raw free-text SEARCH QUERY
+    # itself (e.g. "Intercooler, échangeur" → tokens "intercooler",
+    # "echangeur") and require at least one of those tokens to appear
+    # verbatim inside the supplier's own `designation` string. FadPro
+    # always sets a non-empty `categorie`, so it skipped this check
+    # entirely — but Copia/PartsPro/AD-Tunisie ALWAYS have an empty
+    # `categorie` (see iis_supplier_client._parse_items), so EVERY one of
+    # their results got run through this fragile substring check. Real
+    # in-stock Copia items whose own catalog description doesn't happen to
+    # contain the literal French search words (different phrasing,
+    # abbreviations, etc.) were silently dropped — even though the item had
+    # already passed TecDoc's own relevance check upstream (its OEM
+    # `articleProductName` matched the query 1:1). That upstream TecDoc
+    # match is a reliable relevance signal on its own; re-checking free
+    # text against a supplier's raw description added no value and only
+    # caused false negatives. The free-text fallback is removed — the
+    # label_tokens filter now ONLY applies when the frontend explicitly
+    # passed a `slug` (i.e. we have a real, curated category label to match
+    # against, not an arbitrary search phrase).
     cat_label = get_label_from_slug(slug) if slug else None
     label_tokens = _designation_query_tokens(cat_label) if cat_label else []
-    if not label_tokens:
-        label_tokens = _designation_query_tokens(query)
-        
+
     cat_required = _category_filter_for_query(query)
 
+    # LAST-RESORT lenient sanity check: the free-text query itself,
+    # tokenised. Used ONLY when neither a curated SUBCATEGORY_CATEGORY_
+    # FILTERS rule (cat_required) nor an explicit slug/label (label_tokens)
+    # already narrowed things down. Without this, an item whose OEM cross-
+    # reference happens to point at a totally different product in our own
+    # supplier's catalogue slipped through completely unchecked — e.g.
+    # searching "Pare-chocs" (front bumper) returned a "JOINT CULASSE"
+    # (cylinder head gasket) because TecDoc's OEM ref 1335850 resolved to
+    # that item in FadPro's DB. Deliberately ANY-token (not ALL) so
+    # differently-phrased-but-genuinely-relevant results still survive —
+    # this only rejects items that share NO vocabulary at all with what the
+    # customer actually searched for.
+    query_tokens = _designation_query_tokens(query)
 
     def _passes_category_filter(r: dict) -> bool:
         cat_str = r.get("categorie") or ""
+        designation = r.get("designation") or r.get("name") or ""
         if cat_str:
             if cat_required:
                 return _category_matches(cat_str, cat_required)
+            if query_tokens:
+                return _designation_has_any_token(designation, query_tokens)
             return True
         if label_tokens:
-            designation = r.get("designation") or r.get("name") or ""
             return _designation_has_any_token(designation, label_tokens)
+        if query_tokens:
+            return _designation_has_any_token(designation, query_tokens)
         return True
-    if cat_required or label_tokens:
-        results = [r for r in results if _passes_category_filter(r)]        
+    if cat_required or label_tokens or query_tokens:
+        results = [r for r in results if _passes_category_filter(r)]
     # Sort: in-stock items first, then by price ascending. Out-of-stock items
     # are still shown so the user can see what's available in the supplier
     # catalog (labelled "Hors stock" on the card).
@@ -1986,6 +2439,7 @@ async def oem_stock_search(
         "is_partial": partial,
         "prewarm_queued": partial,
     }
+
 
 def normalize(text: str) -> set:
     if not text:
@@ -2209,7 +2663,6 @@ async def admin_create_part(data: ManualPartIn, admin: dict = Depends(require_ad
         raise HTTPException(404, "Catégorie/sous-catégorie introuvable")
 
     compatible_refs = [r.strip() for r in (data.compatible_refs or []) if r and r.strip()]
-    
 
     doc = {
         "id": str(uuid.uuid4()),
@@ -2328,15 +2781,17 @@ async def on_startup():
         partialFilterExpression={"model_id": {"$exists": True}},
         name="model_id_1_lang_id_1_q_1",
     )
+    await db.tecdoc_vehicle_type_details.create_index(
+        [("vehicle_id", 1), ("lang_id", 1), ("country_filter_id", 1)],
+        unique=True,
+    )
     await seed_admin()
     await db.password_resets.create_index("token", unique=True)
     await db.password_resets.create_index("expires_at", expireAfterSeconds=0)
 
-
 app.include_router(api)
 
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -2352,4 +2807,15 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 
 @app.on_event("shutdown")
 async def shutdown():
+    # STEQ (b2bsteq.com) allows only ONE active session per account
+    # platform-wide. Every server restart/redeploy while a STEQ session was
+    # active used to leave it dangling — silently blocking every login
+    # (ours on the next boot, AND the user logging in directly on
+    # b2bsteq.com) with "Compte déjà connecté ailleurs" until the ~15 min
+    # session timer expired on its own. Explicitly logging out here on every
+    # shutdown (including redeploys) releases the slot immediately instead.
+    try:
+        await get_steq().logout()
+    except Exception as e:
+        logging.warning(f"steq logout on shutdown failed (non-fatal): {e}")
     client.close()

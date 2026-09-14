@@ -80,17 +80,6 @@ const BRAND_DEFS = [
     ],
   },
   {
-    name: "Mercedes-Benz", slug: "mercedes", color: "#00ADEF", bg: "rgba(0,173,239,0.08)", country: "Allemagne",
-    models: [
-      M("Classe A W169", "hatchback"), M("Classe A W176", "hatchback"), M("Classe A W177", "hatchback"),
-      M("Classe B", "hatchback"),
-      M("Classe C W204", "sedan"), M("Classe C W205", "sedan"), M("Classe C W206", "sedan"),
-      M("Classe E W212", "sedan"), M("Classe E W213", "sedan"),
-      M("CLA", "sedan"), M("GLA", "suv"), M("GLB", "suv"), M("GLC", "suv"), M("GLE", "suv"), M("GLK", "suv"),
-      M("Sprinter", "van"), M("Vito", "van"),
-    ],
-  },
-  {
     name: "BMW", slug: "bmw", color: "#1C69D4", bg: "rgba(28,105,212,0.08)", country: "Allemagne",
     models: [
       M("Série 1 E87", "hatchback"), M("Série 1 F20", "hatchback"), M("Série 1 F40", "hatchback"),

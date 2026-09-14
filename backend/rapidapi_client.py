@@ -43,7 +43,26 @@ def _headers() -> dict:
 
 
 async def vin_lookup(vin: str) -> Optional[Dict]:
-    """Look up a VIN → returns {manuId, manuName, modelId, modelName} or None."""
+    """Look up a VIN → returns {manuId, manuName, modelId, modelName} or None.
+
+    A VIN's WMI+VDS prefix does not always resolve to a single TecDoc model —
+    tecdoc-vin-check can return SEVERAL `matchingModels` (e.g. a SEAT VIN
+    matching both "LEON (5F1)" and "LEON ST (5F8)", or even a different body
+    style like "ATECA"). Historically this function silently picked
+    `models[0]` and threw away everything else, which meant the engine
+    picker only ever showed variants of ONE guessed model — wrong whenever
+    the real vehicle was actually the second/third match.
+
+    TecDoc's response also carries `matchingVehicles`: the full flat list of
+    every concrete vehicleId across ALL matching models for this VIN
+    pattern, each with its own modelId + `vehicleTypeDescription` (e.g.
+    "1.4 TSI") + a human-readable `carName` (e.g. "SEAT LEON ST (5F8) 1.4
+    TSI"). We now surface this as `matching_vehicles` (shaped like the
+    list-vehicles-id items: vehicleId/typeEngineName/manufacturerName/
+    modelName, plus modelId + carName) so the frontend can show the
+    customer EVERY real vehicleId — across every candidate model — instead
+    of guessing one model and hiding the rest.
+    """
     vin = (vin or "").strip().upper()
     if len(vin) < 11:
         return None
@@ -58,16 +77,39 @@ async def vin_lookup(vin: str) -> Optional[Dict]:
             data = (payload or {}).get("data") or {}
             manus = (data.get("matchingManufacturers") or {}).get("array") or []
             models = (data.get("matchingModels") or {}).get("array") or []
+            vehicles_raw = (data.get("matchingVehicles") or {}).get("array") or []
             if not models:
                 return None
             m = models[0]
             manu = next((x for x in manus if x.get("manuId") == m.get("manuId")), {})
+
+            manu_by_id = {x.get("manuId"): x.get("manuName") for x in manus if x.get("manuId") is not None}
+            model_by_id = {x.get("modelId"): x.get("modelName") for x in models if x.get("modelId") is not None}
+
+            matching_vehicles: List[Dict] = []
+            seen_vids = set()
+            for v in vehicles_raw:
+                vid = v.get("vehicleId")
+                if not vid or vid in seen_vids:
+                    continue
+                seen_vids.add(vid)
+                matching_vehicles.append({
+                    "vehicleId": vid,
+                    "modelId": v.get("modelId"),
+                    "manuId": v.get("manuId"),
+                    "manufacturerName": manu_by_id.get(v.get("manuId"), "") or "",
+                    "modelName": model_by_id.get(v.get("modelId"), "") or "",
+                    "typeEngineName": v.get("vehicleTypeDescription") or "",
+                    "carName": v.get("carName") or "",
+                })
+
             return {
                 "vin": vin,
                 "manu_id": m.get("manuId"),
                 "manu_name": manu.get("manuName") or m.get("manuName") or "",
                 "model_id": m.get("modelId"),
                 "model_name": m.get("modelName") or "",
+                "matching_vehicles": matching_vehicles,
             }
     except Exception as e:
         logger.warning(f"RapidAPI vin error: {e}")
@@ -106,6 +148,46 @@ async def list_vehicles_for_model(model_id: int, lang_id: int = LANG_FR,
         return []
 
 
+async def get_vehicle_type_details(vehicle_id: int, type_id: int = TYPE_ID, lang_id: int = LANG_FR,
+                                    country_filter_id: int = 63) -> Optional[Dict]:
+    """Full technical details for a single TecDoc vehicleId — used to
+    disambiguate vehicle variants that share the same `typeEngineName`
+    label (e.g. two "1.4" engines with different power output under
+    different vehicleIds). Returns a dict with at least
+    {manufacturerName, modelType, typeEngineName, constructionIntervalStart,
+    constructionIntervalEnd, powerKw, powerPs, capacityLt, fuelType,
+    engCodes, ...} or None.
+
+        GET /types/type-id/{type_id}/vehicle-type-details/{vehicle_id}
+            /lang-id/{lang_id}/country-filter-id/{country_filter_id}
+    """
+    if not vehicle_id:
+        return None
+    url = (
+        f"{API_BASE}/types/type-id/{type_id}/vehicle-type-details/{vehicle_id}"
+        f"/lang-id/{lang_id}/country-filter-id/{country_filter_id}"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as cl:
+            r = await cl.get(url, headers=_headers())
+            if r.status_code != 200:
+                logger.warning(f"RapidAPI vehicle-type-details {vehicle_id} → {r.status_code}: {r.text[:200]}")
+                return None
+            data = r.json()
+            if isinstance(data, dict):
+                details = data.get("vehicleTypeDetails")
+                if isinstance(details, dict):
+                    return details
+                # Defensive fallback — some responses may return the fields
+                # directly at the top level instead of nested.
+                if data.get("typeEngineName") or data.get("powerKw"):
+                    return data
+            return None
+    except Exception as e:
+        logger.warning(f"RapidAPI vehicle-type-details error for {vehicle_id}: {e}")
+        return None
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # VIN → sra_commercial via vin-decoder-mega + intelligent vehicle-id picker
 # ──────────────────────────────────────────────────────────────────────────
@@ -122,7 +204,7 @@ async def vin_mega_decode(vin: str) -> Optional[Dict]:
         return None
     headers = {
         "x-rapidapi-host": VIN_MEGA_HOST,
-        "x-rapidapi-key": os.environ.get("RAPIDAPI_KEY", ""),
+        "x-rapidapi-key": os.environ.get("MEGAAPI_KEY", ""),
         "Content-Type": "application/x-www-form-urlencoded",
     }
     try:
@@ -134,10 +216,17 @@ async def vin_mega_decode(vin: str) -> Optional[Dict]:
             payload = r.json()
             if not isinstance(payload, dict):
                 return None
-            # vin-decoder-mega nests the real fields under "data"
             inner = payload.get("data")
             if isinstance(inner, dict):
-                return inner
+                # code_erreur/message/api_version liegen AUSSERHALB von "data" —
+                # ins zurückgegebene Dict mergen, damit Aufrufer den Erfolgsstatus
+                # prüfen können, ohne die Wrapper-Struktur zu kennen.
+                return {
+                    **inner,
+                    "code_erreur": payload.get("code_erreur"),
+                    "message": payload.get("message"),
+                    "api_version": payload.get("api_version"),
+                }
             return payload
     except Exception as e:
         logger.warning(f"vin-mega error: {e}")
@@ -366,32 +455,91 @@ async def find_article_by_oem(article_oem_no: str, lang_id: int = LANG_FR) -> Op
         return None
 
 
-async def article_complete_details(article_id: int, type_id: int = 1, lang_id: int = LANG_FR,
-                                    country_filter_id: int = 63) -> Optional[Dict]:
-    """Step 2: POST /articles/article-id-complete-details. Returns the full
-    article dict {articleId, articleNo, articleProductName, supplierName,
-    s3image, allSpecifications, oemNo, compatibleCars, …} or None."""
-    if not article_id:
+async def find_article_by_number(article_no: str, type_id: int = TYPE_ID, lang_id: int = LANG_FR,
+                                  country_filter_id: int = 63) -> Optional[Dict]:
+    """Fallback lookup used when `article_oem_no_search` finds nothing (404) —
+    e.g. AD-Tunisie / Copia / PartsPro item references are the SUPPLIER's own
+    articleNo, not a TecDoc OEM number, so step 1 (article-oem-search-no)
+    almost never matches them. This calls TecDoc's own article-number-details
+    endpoint directly with that articleNo:
+
+        GET /articles/article-number-details/type-id/{type_id}
+            ?langId=...&countryFilterId=...&articleNo=...
+
+    Returns the FIRST matching article (with at least an articleId) or None.
+    """
+    no = (article_no or "").strip()
+    if not no:
         return None
-    url = f"{API_BASE}/articles/article-id-complete-details"
-    headers = {
-        "x-rapidapi-key": _api_key(),
-        "x-rapidapi-host": API_HOST,
-        "Content-Type": "application/x-www-form-urlencoded",
-    }
+    url = f"{API_BASE}/articles/article-number-details/type-id/{type_id}"
     try:
         async with httpx.AsyncClient(timeout=30.0) as cl:
-            r = await cl.post(url, headers=headers, data={
-                "typeId": type_id,
+            r = await cl.get(url, headers=_headers(), params={
+                "langId": lang_id,
+                "countryFilterId": country_filter_id,
+                "articleNo": no,
+            })
+            if r.status_code != 200:
+                logger.warning(f"RapidAPI article-number-details {no} → {r.status_code}: {r.text[:200]}")
+                return None
+            data = r.json()
+            if isinstance(data, list):
+                items = data
+            elif isinstance(data, dict):
+                items = data.get("articles") or data.get("data") or []
+                # Some TecDoc endpoints return the single article object
+                # directly at the top level instead of wrapping it in a list.
+                if not items and data.get("articleId"):
+                    items = [data]
+            else:
+                items = []
+            if not items:
+                return None
+            return items[0]
+    except Exception as e:
+        logger.warning(f"RapidAPI article-number-details error: {e}")
+        return None
+
+
+async def article_complete_details(article_id: int, type_id: int = 1, lang_id: int = LANG_FR,
+                                    country_filter_id: int = 63) -> Optional[Dict]:
+    """Step 2: full article details (image, specs, OEM numbers, compatible
+    cars, …) for a known TecDoc articleId:
+
+        GET /articles/article-complete-details/type-id/{type_id}
+            ?langId=...&countryFilterId=...&articleId=...
+
+    Returns the article dict {articleId, articleNo, articleProductName,
+    supplierName, s3image, allSpecifications, oemNo, compatibleCars, …} or
+    None. Response shape mirrors article-number-details
+    ({"countArticles": N, "articles": [...]}) — parsed defensively since
+    RapidAPI sometimes wraps a single object instead of a list."""
+    if not article_id:
+        return None
+    url = f"{API_BASE}/articles/article-complete-details/type-id/{type_id}"
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as cl:
+            r = await cl.get(url, headers=_headers(), params={
                 "langId": lang_id,
                 "countryFilterId": country_filter_id,
                 "articleId": article_id,
             })
             if r.status_code != 200:
-                logger.warning(f"RapidAPI article-details → {r.status_code}: {r.text[:200]}")
+                logger.warning(f"RapidAPI article-complete-details → {r.status_code}: {r.text[:200]}")
                 return None
-            payload = r.json() or {}
-            return payload.get("article") or None
+            payload = r.json()
+            if isinstance(payload, dict):
+                if isinstance(payload.get("article"), dict):
+                    return payload["article"]
+                articles = payload.get("articles")
+                if isinstance(articles, list) and articles:
+                    return articles[0]
+                if payload.get("articleId"):
+                    return payload
+                return None
+            if isinstance(payload, list) and payload:
+                return payload[0]
+            return None
     except Exception as e:
-        logger.warning(f"RapidAPI article-details error: {e}")
+        logger.warning(f"RapidAPI article-complete-details error: {e}")
         return None

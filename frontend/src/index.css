@@ -137,7 +137,7 @@ h6,
 
 /* Custom selection */
 ::selection {
-    background: #dc2626;
+    background: blue;
     color: white;
 }
 

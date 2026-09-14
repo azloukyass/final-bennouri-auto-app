@@ -2,7 +2,10 @@
 FadPro.tn B2B partner integration.
 - Login once per session, cache JWT in-memory (token expires ~12h)
 - Search by reference origin: GET /fad/api/b2b/search?refFour=...
-- Apply price markup: prix * (1 + 0.19) + 50 DT
+- Apply unified price markup (same formula across all suppliers —
+  FadPro, Copia, PartsPro, AD-Tunisie):
+      prix_final = prix_origine * (1 + PRICE_MARKUP_VAT + PRICE_MARGIN)
+                  = prix_origine * 1.45   (19% VAT + 26% margin)
 """
 
 import os
@@ -17,8 +20,8 @@ logger = logging.getLogger(__name__)
 FADPRO_BASE = os.environ.get("FADPRO_BASE_URL", "https://fadpro.tn:8095")
 FADPRO_USER = os.environ.get("FADPRO_USER", "5428")
 FADPRO_PASS = os.environ.get("FADPRO_PASSWORD", "wk5428fad*/*")
-PRICE_MARKUP_VAT = 0.19       # +19%
-PRICE_FIXED_FEE = 50.0        # +50 TND
+PRICE_MARKUP_VAT = 0.19       # +19% VAT
+PRICE_MARGIN = 0.26            # +26% margin
 
 # In-memory cache for token (single FastAPI worker)
 _token_cache = {"token": None, "expires_at": 0}
@@ -52,8 +55,9 @@ async def _get_token(force: bool = False) -> Optional[str]:
 
 
 def _adjust_price(prix) -> Optional[float]:
-    """Apply unified markup across all suppliers:
-    final = prix + 19% + 25% = prix * 1.44
+    """Apply the unified markup used across every supplier:
+    final = prix_origine * (1 + PRICE_MARKUP_VAT + PRICE_MARGIN)
+          = prix_origine * 1.45   (19% VAT + 26% margin)
     Returns rounded to 3 decimals (TND)."""
     if prix is None:
         return None
@@ -63,7 +67,7 @@ def _adjust_price(prix) -> Optional[float]:
         return None
     if p <= 0:
         return None
-    return round(p * 1.44, 3)
+    return round(p * (1 + PRICE_MARKUP_VAT + PRICE_MARGIN), 3)
 
 
 def _normalize_item(raw: Dict) -> Dict:
